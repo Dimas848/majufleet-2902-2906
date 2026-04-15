@@ -8,8 +8,9 @@ import { Menu, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const links = [
-  { label: "Home",       href: "/" },
-  { label: "About Us",   href: "/about" },
+  { label: "Home", href: "/" },
+  { label: "About Us", href: "/about" },
+  { label: "Our Services", href: "/services" },
   { label: "Contact Us", href: "/contact" },
 ];
 
@@ -20,9 +21,9 @@ export default function Navbar() {
   return (
     <nav className="nav-glass fixed top-0 left-0 right-0 z-50 border-b border-white/5">
       
-      {/* INI YANG DIUBAH: max-w dihapus sama sekali, murni w-full px-10 */}
+      {/* INI YANG DIBENERIN: Balik lagi murni pakai w-full px-10 */}
       <div className="w-full px-10 h-[68px] flex items-center justify-between">
-
+        
         {/* Logo */}
         <Link href="/" className="flex items-center gap-3 group">
           <Image src="/logo.png" alt="Maju Fleet Logo" width={42} height={42} className="opacity-90" />
@@ -48,7 +49,7 @@ export default function Navbar() {
           ))}
         </div>
 
-        {/* CTA (Di pojok kanan) */}
+        {/* CTA */}
         <div className="hidden md:block">
           <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
             <Link
@@ -59,7 +60,7 @@ export default function Navbar() {
                 boxShadow: "0 0 10px rgba(176,38,255,0.2), inset 0 0 10px 1px rgba(176,38,255,0.15)",
               }}
             >
-              Request Demo
+              Login Dashboard
             </Link>
           </motion.div>
         </div>

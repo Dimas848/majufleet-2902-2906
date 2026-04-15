@@ -1,37 +1,43 @@
-"use client";
-
-import { motion } from "framer-motion";
 import { FadeUp } from "@/components/FadeUp";
 
-/* Developed by: Dimas Wicaksono Wibowo */
-
 const metrics = [
-  { num: "320+",   label: "Active Vessels" },
-  { num: "12M+",   label: "Tons Delivered" },
-  { num: "150+",   label: "Global Ports" },
-  { num: "24/7",   label: "Freight Ops" },
+  { value: "320+", label: "ACTIVE VESSELS" },
+  { value: "12M+", label: "TONS DELIVERED" },
+  { value: "150+", label: "GLOBAL PORTS" },
+  { value: "24/7", label: "FREIGHT OPS" },
 ];
 
-export default function AboutMetrics() {
+export default function AboutMetricsSection() {
   return (
-    <section className="py-24 px-6 bg-bg-dark">
-      <div className="max-w-7xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-4">
-        {metrics.map((m, i) => (
-          <FadeUp key={i} delay={i * 0.1}>
-            <motion.div
-              whileHover={{ scale: 1.04 }}
-              className="p-8 rounded-lg text-center"
-              style={{ background: "rgba(41,42,46,0.3)" }}
-            >
-              <div className="font-grotesk font-bold text-[clamp(36px,4vw,52px)] tracking-[-2.4px] text-purple mb-2">
-                {m.num}
+    <section className="py-24 bg-bg-dark">
+      <div className="max-w-[1400px] mx-auto px-6">
+        
+        {/* INI BAGIAN JUDUL YANG DITAMBAHKAN */}
+        <FadeUp className="text-center mb-16">
+          <p className="font-inter text-[10px] uppercase tracking-[3px] text-[#BDF4FF] mb-3">
+            Global Logistics Scale
+          </p>
+          <h2 className="font-grotesk font-bold text-4xl md:text-5xl text-white tracking-[-1px]">
+            NUMBERS THAT <span className="text-grad-purple">DELIVER</span>
+          </h2>
+        </FadeUp>
+
+        {/* INI KOTAK-KOTAK ANGKANYA */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          {metrics.map((m, i) => (
+            <FadeUp key={i} delay={i * 0.1}>
+              <div className="p-10 rounded-lg bg-[#1a1b20] border border-white/5 text-center flex flex-col items-center justify-center hover:border-[#B026FF]/30 transition-all duration-300">
+                <h3 className="font-grotesk font-bold text-4xl md:text-5xl text-[#B026FF] mb-3">
+                  {m.value}
+                </h3>
+                <p className="font-inter text-[11px] uppercase tracking-[2px] text-white/70 font-semibold">
+                  {m.label}
+                </p>
               </div>
-              <div className="font-inter font-bold text-[11px] uppercase tracking-[1.2px] text-cyan">
-                {m.label}
-              </div>
-            </motion.div>
-          </FadeUp>
-        ))}
+            </FadeUp>
+          ))}
+        </div>
+        
       </div>
     </section>
   );
