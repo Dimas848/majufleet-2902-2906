@@ -21,14 +21,11 @@ const persons = [
 
 export default function ContactPersons() {
   return (
-    // Tambahkan h-full di sini agar parent setinggi form di sebelahnya
     <div className="flex flex-col gap-5 h-full">
       {persons.map((p, i) => (
-        // Tambahkan flex-1 dan flex flex-col agar FadeUp ikut memanjang
         <FadeUp key={i} delay={0.15 + i * 0.12} className="flex-1 flex flex-col">
           <motion.div
             whileHover={{ y: -3 }}
-            // Tambahkan flex-1 dan justify-center agar isi teks tetap di tengah saat kotaknya memanjang
             className="p-10 rounded-lg bg-bg-card transition-transform duration-300 flex-1 flex flex-col justify-center"
             style={{ borderLeft: "2px solid rgba(189,244,255,0.2)" }}
           >

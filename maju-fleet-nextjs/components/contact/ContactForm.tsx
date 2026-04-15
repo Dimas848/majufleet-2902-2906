@@ -53,7 +53,6 @@ export default function ContactForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // Simulate API call
     await new Promise((r) => setTimeout(r, 1800));
     setForm(INITIAL_FORM);
     setLoading(false);
@@ -74,13 +73,12 @@ export default function ContactForm() {
         className="relative p-12 rounded-lg bg-bg-card h-full flex flex-col"
         style={{ boxShadow: "0 25px 50px -12px rgba(0,0,0,0.3)" }}
       >
-        {/* Purple left bar */}
+      
         <div
           className="absolute left-0 top-0 bottom-0 w-1 rounded-l-lg"
           style={{ background: "#B026FF" }}
         />
 
-        {/* Heading - Disesuaikan agar lebih sejajar */}
         <div className="flex items-center gap-3 mb-10">
           <Shield size={18} style={{ color: "#E5B5FF" }} />
           <h3 className="font-grotesk font-bold text-[28px] text-white uppercase tracking-tight">

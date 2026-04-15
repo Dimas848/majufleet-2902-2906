@@ -53,7 +53,7 @@ export default function ServicesPage() {
           </p>
         </FadeUp>
 
-        {/* MENGGUNAKAN FLEXBOX AGAR 2 ITEM TERAKHIR CENTER */}
+        
         <div className="flex flex-wrap justify-center gap-6 items-stretch">
           {services.map((s, i) => (
             <FadeUp 

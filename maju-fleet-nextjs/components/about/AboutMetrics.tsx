@@ -12,7 +12,7 @@ export default function AboutMetricsSection() {
     <section className="py-24 bg-bg-dark">
       <div className="max-w-[1400px] mx-auto px-6">
         
-        {/* INI BAGIAN JUDUL YANG DITAMBAHKAN */}
+      
         <FadeUp className="text-center mb-16">
           <p className="font-inter text-[10px] uppercase tracking-[3px] text-[#BDF4FF] mb-3">
             Global Logistics Scale
@@ -22,7 +22,7 @@ export default function AboutMetricsSection() {
           </h2>
         </FadeUp>
 
-        {/* INI KOTAK-KOTAK ANGKANYA */}
+       
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           {metrics.map((m, i) => (
             <FadeUp key={i} delay={i * 0.1}>

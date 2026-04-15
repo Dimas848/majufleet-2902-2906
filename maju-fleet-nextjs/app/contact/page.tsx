@@ -5,7 +5,6 @@ import { FadeUp } from "@/components/FadeUp";
 export default function ContactPage() {
   return (
     <div className="relative min-h-screen bg-bg-deep overflow-hidden">
-      {/* Background glows */}
       <div
         className="fixed right-[-128px] top-[240px] w-[500px] h-[500px] rounded-xl pointer-events-none z-0"
         style={{
@@ -24,7 +23,6 @@ export default function ContactPage() {
 
       <section className="relative z-10 py-24 px-6">
         <div className="max-w-7xl mx-auto">
-          {/* Header */}
           <FadeUp className="text-center mb-20">
             <h1
               className="font-grotesk font-bold tracking-[-3.6px] text-white mb-5"

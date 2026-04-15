@@ -16,12 +16,11 @@ export default function DeepTechGrid() {
           </h2>
         </FadeUp>
 
-        {/* --- INI BAGIAN YANG DIUBAH: Ganti 'grid grid-cols...' dengan flexbox --- */}
+      
         <div className="flex flex-col md:flex-row gap-4 items-stretch">
           
-          {/* Large image card — Menjadi flex item 2/3, min-h-full saat md (desktop) */}
+
           <FadeUp delay={0} className="flex-[2] relative rounded-lg overflow-hidden md:min-h-full min-h-[300px]">
-            {/* INI KUNCI NYA: Gambar harus mengisi seluruh kontainer dengan object-cover absolute */}
             <Image
               src="/ship-aerial.png"
               alt="Container ship aerial view"

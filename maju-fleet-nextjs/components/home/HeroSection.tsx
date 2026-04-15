@@ -51,14 +51,11 @@ export default function HeroSection() {
   return (
     <section className="relative min-h-[88vh] flex items-center overflow-hidden">
       
-      {/* --- BACKGROUND GAMBAR KAPAL --- */}
       <div
         className="absolute inset-0 bg-cover bg-center"
-        // Ganti nama file ini sesuai nama gambar yang kamu taruh di folder public
         style={{ backgroundImage: "url('/shiphomebackground.png')" }} 
       />
       
-      {/* OVERLAY GELAP: Supaya teks putih tetap kebaca. Kiri lebih gelap, kanan agak transparan */}
       <div
         className="absolute inset-0"
         style={{
@@ -67,7 +64,7 @@ export default function HeroSection() {
       />
       {/* ------------------------------- */}
 
-      {/* Decorative blobs (tetap dipertahankan tapi opacity dikecilin dikit) */}
+      {/* Decorative blobs */}
       <div
         className="absolute right-[-60px] top-1/4 w-96 h-96 rounded-xl pointer-events-none"
         style={{ background: "#B026FF", opacity: 0.05, filter: "blur(60px)" }}

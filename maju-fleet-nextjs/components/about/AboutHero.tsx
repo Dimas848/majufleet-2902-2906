@@ -5,12 +5,11 @@ import { motion } from "framer-motion";
 export default function AboutHero() {
   return (
     <section className="relative h-[72vh] flex items-end overflow-hidden">
-      {/* Background ship image */}
       <div
         className="absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: "url('/ship-sunset.png')" }}
       />
-      {/* Dark overlay */}
+      
       <div
         className="absolute inset-0"
         style={{
@@ -18,7 +17,7 @@ export default function AboutHero() {
             "linear-gradient(180deg, rgba(18,19,23,0.65) 0%, rgba(18,19,23,0.96) 100%)",
         }}
       />
-      {/* Purple radial deco */}
+   
       <div
         className="absolute right-0 top-0 bottom-0 w-1/2 pointer-events-none opacity-20"
         style={{
