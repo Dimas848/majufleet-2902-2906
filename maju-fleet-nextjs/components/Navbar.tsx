@@ -1,13 +1,13 @@
+// Navbar.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import Link from "next/link"; // <-- Import Link dari next/link
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, User, Lock, Eye, EyeOff, RefreshCw, ShieldAlert, ArrowLeft, Mail, Phone, ChevronDown, ChevronUp } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// Update links menggunakan path routing yang baru
 const links = [
   { label: "Home", href: "/" },
   { label: "About Us", href: "/about" },
@@ -23,7 +23,6 @@ export default function Navbar() {
   const [activeModal, setActiveModal] = useState<"none" | "login" | "register" | "admin">("none");
   const [loading, setLoading] = useState(false);
   
-  // Hapus state activeSection karena sekarang kita menggunakan pathname untuk mendeteksi halaman aktif
   const [isScrolled, setIsScrolled] = useState(false);
 
   const [showLoginPassword, setShowLoginPassword] = useState(false);
@@ -46,7 +45,6 @@ export default function Navbar() {
   useEffect(() => {
     generateCaptcha();
     
-    // Set initial scroll state
     if (window.scrollY > 50) {
       setIsScrolled(true);
     } else {
@@ -69,8 +67,6 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Hapus fungsi scrollToSection karena kita pindah ke multi-page
-  
   const getPasswordStrength = (pwd: string) => {
     let str = 0;
     if (pwd.length > 0) str += 25;
@@ -91,9 +87,12 @@ export default function Navbar() {
     e.preventDefault();
     setLoading(true);
     await new Promise((resolve) => setTimeout(resolve, 1500));
+    
+    document.cookie = "fleet_auth_token=authorized; path=/; max-age=86400; SameSite=Strict";
+
     setLoading(false);
     setActiveModal("none");
-    router.push(targetRoute);
+    window.location.href = targetRoute;
   };
 
   if (
@@ -105,7 +104,6 @@ export default function Navbar() {
 
   return (
     <>
-      {/* NAVBAR CONTAINER */}
       <nav 
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 flex items-center ${
           isScrolled 
@@ -115,9 +113,7 @@ export default function Navbar() {
       >
         <div className="w-full px-3 md:px-3 flex items-center justify-between">
           
-         {/* Logo */}
           <div className="flex items-center shrink-0">
-            {/* Ganti a tag menjadi Link */}
             <Link href="/" className="flex items-center gap-4 group">
               <Image 
                 src="/logo.png" 
@@ -132,10 +128,8 @@ export default function Navbar() {
             </Link>
           </div>
 
-          {/* Right Area: Main Menu & Login Button */}
           <div className="hidden md:flex items-start gap-8">
             
-            {/* Main Menu Dropdown */}
             <div className="relative">
               <button 
                 onClick={() => setMainMenuDropdown(!mainMenuDropdown)}
@@ -158,7 +152,6 @@ export default function Navbar() {
                   >
                     <div className="flex flex-col py-4">
                       {links.map((l) => {
-                        // Cek apakah ini halaman aktif berdasarkan pathname
                         const isActive = pathname === l.href;
                         
                         return (
@@ -182,7 +175,6 @@ export default function Navbar() {
               </AnimatePresence>
             </div>
 
-            {/* Login Button */}
             <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
               <button
                 id="login-trigger-btn"
@@ -198,13 +190,11 @@ export default function Navbar() {
 
           </div>
 
-          {/* Mobile Menu Button */}
           <button onClick={() => setMenuOpen(!menuOpen)} className="md:hidden shrink-0 text-white/70 p-2 mt-1 bg-black/40 rounded backdrop-blur-md border border-white/10">
             {menuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
 
-        {/* Mobile Dropdown */}
         <AnimatePresence>
           {menuOpen && (
             <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="md:hidden mt-4 border-y border-white/10 bg-[#0a0a0c]/95 backdrop-blur-md px-6 py-4 flex flex-col gap-2 overflow-hidden">
@@ -229,13 +219,11 @@ export default function Navbar() {
         </AnimatePresence>
       </nav>
 
-      {/* --- MODAL LOGIN, REGISTER, & ADMIN REMAIN THE SAME --- */}
       <AnimatePresence>
         {activeModal !== "none" && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-10 overflow-y-auto">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setActiveModal("none")} className="fixed inset-0 bg-black/80 backdrop-blur-sm" />
 
-            {/* MODAL LOGIN CREW (USER) */}
             {activeModal === "login" && (
               <motion.div key="modal-login" initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-[420px] bg-[#0a0a0c] border border-white/10 rounded-xl p-8 shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10 my-auto">
                 <button onClick={() => setActiveModal("none")} className="absolute top-4 right-4 text-white/40 hover:text-[#B026FF] transition-colors"><X size={20} /></button>
@@ -274,7 +262,6 @@ export default function Navbar() {
               </motion.div>
             )}
 
-            {/* MODAL REGISTER */}
             {activeModal === "register" && (
               <motion.div key="modal-register" initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-[420px] bg-[#0a0a0c] border border-white/10 rounded-xl p-8 shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10 my-auto">
                 <button onClick={() => setActiveModal("none")} className="absolute top-4 right-4 text-white/40 hover:text-[#B026FF] transition-colors"><X size={20} /></button>
@@ -343,7 +330,6 @@ export default function Navbar() {
               </motion.div>
             )}
 
-            {/* MODAL ADMIN */}
             {activeModal === "admin" && (
               <motion.div key="modal-admin" initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-[420px] bg-[#0a0a0c] border border-[#B026FF]/20 rounded-xl p-8 shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10 my-auto">
                 <button onClick={() => setActiveModal("none")} className="absolute top-4 right-4 text-white/40 hover:text-[#B026FF] transition-colors"><X size={20} /></button>

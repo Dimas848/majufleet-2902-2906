@@ -1,3 +1,4 @@
+// AdminNavbar.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -14,7 +15,6 @@ export default function AdminNavbar() {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>("Loading...");
 
-  // Efek Jam Real-Time
   useEffect(() => {
     const updateClock = () => {
       const now = new Date();
@@ -30,9 +30,11 @@ export default function AdminNavbar() {
     return () => clearInterval(timerId);
   }, []);
 
-  const handleLogout = () => router.push("/");
+  const handleLogout = () => {
+    document.cookie = "fleet_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    window.location.href = "/"; 
+  };
 
-  // Daftar menu
   const navLinks = [
     { name: "FLEET", href: "/Dashboard-Admin/fleet" },
     { name: "MAP", href: "/Dashboard-Admin/map" },
@@ -44,7 +46,6 @@ export default function AdminNavbar() {
   return (
     <>
       <nav className="sticky top-0 z-50 h-[80px] flex items-center justify-between px-6 md:px-10 bg-[#0a0a0c]">
-        {/* BAGIAN KIRI: LOGO */}
         <div className="flex items-center gap-4 w-1/3">
           <Image src="/logo.png" alt="Logo" width={65} height={65} className="-mr-1 opacity-90" />
           <span className="font-grotesk font-bold text-[30px] tracking-[3px] uppercase text-[#E5B5FF] drop-shadow-[0_0_10px_rgba(176,38,255,0.4)]">
@@ -52,12 +53,8 @@ export default function AdminNavbar() {
           </span>
         </div>
         
-        {/* BAGIAN TENGAH: MENU (Dynamic Auto-Active) */}
         <div className="hidden lg:flex items-center justify-center gap-10 w-2/3 mt-2">
           {navLinks.map((link) => {
-            // PERBAIKAN LOGIKA DISINI:
-            // Jika href adalah root Dashboard-Admin (LOGS), gunakan perbandingan persis (===)
-            // Jika yang lain, baru gunakan startsWith agar sub-halaman tetap aktif
             const isActive = link.href === "/Dashboard-Admin" 
               ? pathname === link.href 
               : pathname.startsWith(link.href);
@@ -78,7 +75,6 @@ export default function AdminNavbar() {
           })}
         </div>
 
-        {/* BAGIAN KANAN: WAKTU & PROFIL */}
         <div className="flex items-center justify-end gap-6 w-1/3">
           <div suppressHydrationWarning className="border border-[#B026FF]/50 bg-transparent rounded-full px-5 py-2 font-mono text-[11px] text-[#E5B5FF] tracking-widest shadow-[0_0_10px_rgba(176,38,255,0.1)]">
             {currentTime}
@@ -94,10 +90,8 @@ export default function AdminNavbar() {
         </div>
       </nav>
 
-      {/* Garis Bawah Navbar */}
       <div className="w-full h-px bg-white/5 shrink-0 mb-6 mt-[10px]"></div>
 
-      {/* MODAL LOGOUT */}
       <AnimatePresence>
         {showLogoutModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
