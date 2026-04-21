@@ -8,7 +8,7 @@ const services = [
   {
     title: "Maju Economy",
     desc: "Cost-optimized solution for non-urgent bulk shipments. Features schedule-based optimized routing.",
-    price: "Rp 35.000.000 / TEU",
+    price: "IDR 59.000 / KG",
     features: [
       "30-45 Days Estimated Transit",
       "Standard Port Handling",
@@ -21,7 +21,7 @@ const services = [
   {
     title: "Maju Standard",
     desc: "End-to-end container logistics. Integrated with our global satellite tracking for full route transparency.",
-    price: "Rp 65.000.000 / TEU",
+    price: "IDR 70.000 / KG",
     features: [
       "20-30 Days Estimated Transit",
       "Priority Container Handling",
@@ -47,7 +47,7 @@ const services = [
   {
     title: "Maju Express",
     desc: "Priority freight options for time-critical shipments. Guaranteed minimum transit time.",
-    price: "Rp 105.000.000 / TEU",
+    price: "IDR 90.000 / KG",
     features: [
       "10-15 Days Guaranteed Transit",
       "Priority Fleet Allocation Space",
