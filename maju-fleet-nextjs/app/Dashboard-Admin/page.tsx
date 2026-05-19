@@ -17,13 +17,11 @@ export default function AdminLogsPage() {
   return (
     <div className="absolute top-0 left-0 w-full min-h-screen bg-[#0a0a0c] z-50 text-white font-inter selection:bg-[#B026FF] selection:text-white pb-20 overflow-x-hidden flex flex-col">
       
-      {/* NAVBAR */}
       <AdminNavbar />
 
       <main className="w-full max-w-[1400px] mx-auto px-6 md:px-10 flex-1 overflow-y-auto custom-scrollbar relative z-10 pb-20 pt-10">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           
-          {/* HEADER SECTION */}
           <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-8">
             <h1 className="font-grotesk font-bold text-[32px] tracking-[2px] uppercase text-white">DELIVERY</h1>
             <span className="flex items-center gap-2 text-[#00E3FD] font-mono text-[10px] tracking-[2px] uppercase font-bold">
@@ -31,7 +29,6 @@ export default function AdminLogsPage() {
             </span>
           </div>
 
-          {/* TABLE SECTION */}
           <div className="w-full">
             <div className="flex border-b border-transparent pb-4 mb-2 text-[10px] font-mono text-white/40 uppercase tracking-[2px] px-2">
               <div className="w-[15%]">TIME ARRIVAL</div>
@@ -48,7 +45,6 @@ export default function AdminLogsPage() {
                   <div className="w-[20%] text-[14px] font-grotesk font-bold text-white tracking-[1px] uppercase">{log.receiptNumber}</div>
                   <div className="w-[30%] text-[13px] font-mono text-white/70 pr-4">{log.crewMessage}</div>
                   
-                  {/* ROUTE UI */}
                   <div className="w-[20%]">
                     <div className="flex flex-col w-[200px] mx-auto">
                       <div className="flex items-center w-full justify-between relative px-2">
@@ -69,7 +65,6 @@ export default function AdminLogsPage() {
                     </div>
                   </div>
 
-                  {/* STATUS UI */}
                   <div className="w-[15%] flex justify-end">
                     <span className="inline-flex items-center justify-center gap-2 bg-[#00b894]/10 text-[#00b894] border border-[#00b894]/30 px-5 py-2 rounded-full text-[10px] tracking-widest uppercase font-bold shadow-[0_0_10px_rgba(0,184,148,0.1)]">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#00b894]"></span> {log.status}
@@ -91,4 +86,4 @@ export default function AdminLogsPage() {
       `}</style>
     </div>
   );
-} 
+}

@@ -1,25 +1,45 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, Suspense } from "react";
 import { Settings, ChevronDown, ZoomIn, ZoomOut, Filter, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useSearchParams, useRouter } from "next/navigation"; // <--- Import tambahan
 import AdminNavbar from "@/components/adminnavbar"; 
 
-export default function AdminMapPage() {
+// Komponen Isi Map agar aman di Next.js menggunakan parameter URL
+function MapContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
   const [selectedVessel, setSelectedVessel] = useState<string | null>("EVER BLUE");
   const [mapSubTab, setMapSubTab] = useState<"ALL" | "ALERTS">("ALL");
   const [mapScale, setMapScale] = useState(1);
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const [mapStatusFilter, setMapStatusFilter] = useState("ALL");
   const [isSidebarFilterOpen, setIsSidebarFilterOpen] = useState(false);
-  const [isControlModalOpen, setIsControlModalOpen] = useState(false);
   
-  // States untuk modal edit
+  // States Control Modal
+  const [isControlModalOpen, setIsControlModalOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editCrew, setEditCrew] = useState("");
   const [editStatus, setEditStatus] = useState("");
-  const [editReason, setEditReason] = useState(""); // <-- State baru untuk Reason
   const [isEditStatusDropdownOpen, setIsEditStatusDropdownOpen] = useState(false);
+
+  // MENDETEKSI PERUBAHAN DARI DROPDOWN NAVBAR
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "ALERTS") {
+      setMapSubTab("ALERTS");
+    } else {
+      setMapSubTab("ALL");
+    }
+  }, [searchParams]);
+
+  // Handle klik tombol dari dalam sidebar agar merubah URL juga
+  const handleTabChange = (tab: "ALL" | "ALERTS") => {
+    setMapSubTab(tab);
+    router.push(`/Dashboard-Admin/map?tab=${tab}`);
+  };
 
   const [vesselsData, setVesselsData] = useState([
     { id: "EVER BLUE", package: "MAJU STANDARD", crew: "CHRIS", status: "EN ROUTE", statusColor: "text-[#00E3FD]", dotColor: "bg-[#00E3FD]", top: "67%", left: "57%", origin: "Singapore (SGP)", dest: "Tokyo (JPN)", eta: "2026-04-18 09:00", speed: "18.5 knots" },
@@ -33,6 +53,7 @@ export default function AdminMapPage() {
 
   const activeVesselDetails = vesselsData.find(v => v.id === selectedVessel);
 
+  // LOGIKA FILTER SESUAI PILIHAN (ALL / ALERTS)
   const displayedVessels = vesselsData.filter(v => {
     const passesTab = mapSubTab === "ALL" ? true : (v.status === "DELAYED" || v.status === "NOT DEPARTED YET");
     const passesStatus = mapStatusFilter === "ALL" ? true : v.status === mapStatusFilter;
@@ -44,7 +65,6 @@ export default function AdminMapPage() {
       setEditName(activeVesselDetails.id);
       setEditCrew(activeVesselDetails.crew);
       setEditStatus(activeVesselDetails.status);
-      setEditReason(activeVesselDetails.reason || ""); // <-- Load reason saat modal dibuka
       setIsControlModalOpen(true);
     }
   };
@@ -59,12 +79,11 @@ export default function AdminMapPage() {
         if (editStatus === "EN ROUTE" || editStatus === "ARRIVED") {
           newStatusColor = "text-[#00E3FD]";
           newDotColor = "bg-[#00E3FD]";
-          newReason = undefined; // Hapus reason jika status kembali normal
+          newReason = undefined; 
         } else if (editStatus === "DELAYED" || editStatus === "NOT DEPARTED YET") {
           newStatusColor = "text-[#FF3B30]";
           newDotColor = "bg-[#FF3B30]";
-          // Gunakan reason yang diketik, atau nilai default jika kosong
-          newReason = editReason.trim() !== "" ? editReason : "Manual Override Logged"; 
+          if (!newReason) newReason = "Manual Override Logged";
         }
         return { ...v, id: editName, crew: editCrew, status: editStatus, statusColor: newStatusColor, dotColor: newDotColor, reason: newReason };
       }
@@ -75,14 +94,10 @@ export default function AdminMapPage() {
   };
 
   return (
-    <div className="absolute top-0 left-0 w-full min-h-screen bg-[#0a0a0c] z-50 text-white font-inter selection:bg-[#B026FF] selection:text-white pb-6 flex flex-col">
-      
-      <AdminNavbar />
-
+    <>
       <main className="w-full px-6 md:px-10 relative z-10 flex flex-col gap-8 max-w-[1800px] mx-auto flex-1 mt-6">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
           <div className="flex gap-8 h-[750px]">
-            {/* Area Map (Tidak ada perubahan di sini) */}
             <div className="flex-1 bg-[#0d0d11] rounded-[32px] overflow-hidden relative border border-white/5 flex flex-col shadow-lg" ref={mapContainerRef}>
               <div className="absolute top-8 left-8 z-20 pointer-events-none">
                 <p className="flex items-center gap-2 text-[#00FF00] font-mono text-[9px] uppercase tracking-widest mb-1 font-bold">
@@ -117,7 +132,6 @@ export default function AdminMapPage() {
               </motion.div>
             </div>
 
-            {/* Sidebar Data Kapal */}
             <div className="w-[420px] bg-transparent flex flex-col h-full">
               <div className="flex justify-between items-center mb-6 mt-4 relative z-[60]">
                 <h2 className="font-grotesk font-bold text-[20px] uppercase tracking-[1px] text-white">VESSEL MONITOR</h2>
@@ -137,8 +151,8 @@ export default function AdminMapPage() {
               </div>
 
               <div className="flex items-center gap-2 mb-6 border-b border-white/5 pb-4 relative z-40">
-                <button onClick={() => setMapSubTab("ALL")} className={`px-4 py-1.5 rounded-[4px] text-[10px] font-mono tracking-widest font-bold transition-all ${mapSubTab === "ALL" ? "bg-[#B026FF] text-white shadow-[0_0_15px_rgba(176,38,255,0.4)]" : "bg-white/5 text-white/40 hover:text-white"}`}>ALL</button>
-                <button onClick={() => setMapSubTab("ALERTS")} className={`px-4 py-1.5 rounded-[4px] text-[10px] font-mono tracking-widest font-bold transition-all ${mapSubTab === "ALERTS" ? "bg-[#B026FF] text-white shadow-[0_0_15px_rgba(176,38,255,0.4)]" : "bg-white/5 text-white/40 hover:text-white"}`}>ALERTS</button>
+                <button onClick={() => handleTabChange("ALL")} className={`px-4 py-1.5 rounded-[4px] text-[10px] font-mono tracking-widest font-bold transition-all ${mapSubTab === "ALL" ? "bg-[#B026FF] text-white shadow-[0_0_15px_rgba(176,38,255,0.4)]" : "bg-white/5 text-white/40 hover:text-white"}`}>ALL</button>
+                <button onClick={() => handleTabChange("ALERTS")} className={`px-4 py-1.5 rounded-[4px] text-[10px] font-mono tracking-widest font-bold transition-all ${mapSubTab === "ALERTS" ? "bg-[#B026FF] text-white shadow-[0_0_15px_rgba(176,38,255,0.4)]" : "bg-white/5 text-white/40 hover:text-white"}`}>ALERTS</button>
               </div>
 
               <div className="flex-1 overflow-y-auto flex flex-col gap-4 pr-2 custom-scrollbar relative z-30">
@@ -205,29 +219,6 @@ export default function AdminMapPage() {
                     )}
                   </AnimatePresence>
                 </div>
-
-                {/* --- TAMBAHAN REASON INPUT --- */}
-                <AnimatePresence>
-                  {(editStatus === "DELAYED" || editStatus === "NOT DEPARTED YET") && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }} 
-                      animate={{ opacity: 1, height: "auto" }} 
-                      exit={{ opacity: 0, height: 0 }} 
-                      className="relative overflow-hidden"
-                    >
-                      <label className="text-[10px] font-mono text-[#FF3B30] tracking-widest uppercase mb-1.5 mt-2 block">Incident Reason</label>
-                      <input 
-                        type="text" 
-                        value={editReason} 
-                        onChange={(e) => setEditReason(e.target.value)} 
-                        placeholder="e.g. Engine Failure, Bad Weather..." 
-                        className="w-full bg-[#121317] border border-[#FF3B30]/40 rounded p-3 text-sm font-bold text-white focus:border-[#FF3B30] outline-none transition-colors" 
-                      />
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-                {/* ----------------------------- */}
-
                 <div className="w-full h-px bg-white/10 my-2"></div>
                 <div className="grid grid-cols-2 gap-4">
                   <div><label className="text-[10px] font-mono text-white/30 tracking-widest uppercase mb-1.5 block">Package Type</label><input type="text" value={activeVesselDetails.package} disabled className="w-full bg-white/5 border border-white/5 rounded p-2.5 text-xs font-mono text-white/30 cursor-not-allowed" /></div>
@@ -244,7 +235,19 @@ export default function AdminMapPage() {
           </div>
         )}
       </AnimatePresence>
+    </>
+  );
+}
 
+// Komponen pembungkus utama agar penggunaan `useSearchParams` aman di Next.js App Router
+export default function AdminMapPage() {
+  return (
+    <div className="absolute top-0 left-0 w-full min-h-screen bg-[#0a0a0c] z-50 text-white font-inter selection:bg-[#B026FF] selection:text-white pb-6 flex flex-col">
+      <AdminNavbar />
+      <Suspense fallback={<div className="flex-1 flex items-center justify-center text-white/50">Loading Map...</div>}>
+        <MapContent />
+      </Suspense>
+      
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; } 
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; } 

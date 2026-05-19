@@ -1,11 +1,10 @@
-// AdminNavbar.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { User, LogOut } from "lucide-react";
+import { User, LogOut, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function AdminNavbar() {
@@ -14,6 +13,7 @@ export default function AdminNavbar() {
   
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>("Loading...");
+  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
 
   useEffect(() => {
     const updateClock = () => {
@@ -30,22 +30,41 @@ export default function AdminNavbar() {
     return () => clearInterval(timerId);
   }, []);
 
-  const handleLogout = () => {
-    document.cookie = "fleet_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    window.location.href = "/"; 
-  };
+  const handleLogout = () => router.push("/");
 
   const navLinks = [
     { name: "FLEET", href: "/Dashboard-Admin/fleet" },
-    { name: "MAP", href: "/Dashboard-Admin/map" },
-    { name: "ANALYTICS", href: "/Dashboard-Admin/analytics" },
-    { name: "REGISTER", href: "/Dashboard-Admin/register" },
+    { 
+      name: "MAP", 
+      href: "/Dashboard-Admin/map",
+      dropdown: [
+        { name: "ALL", href: "/Dashboard-Admin/map?tab=ALL" },
+        { name: "ALERTS", href: "/Dashboard-Admin/map?tab=ALERTS" }
+      ]
+    },
+    { 
+      name: "ANALYTICS", 
+      href: "/Dashboard-Admin/analytics",
+      dropdown: [
+        { name: "PACKAGE TREND", href: "/Dashboard-Admin/analytics?tab=TREND" },
+        { name: "AVERAGE INCOME", href: "/Dashboard-Admin/analytics?tab=INCOME" }
+      ]
+    },
+    { 
+      name: "REGISTER", 
+      href: "/Dashboard-Admin/register",
+      dropdown: [
+        { name: "FLEET REGISTRATION", href: "/Dashboard-Admin/register?type=fleet" },
+        { name: "CREW REGISTRATION", href: "/Dashboard-Admin/register?type=crew" }
+      ]
+    },
     { name: "LOGS", href: "/Dashboard-Admin" }, 
   ];
 
   return (
     <>
       <nav className="sticky top-0 z-50 h-[80px] flex items-center justify-between px-6 md:px-10 bg-[#0a0a0c]">
+        {/* LOGO */}
         <div className="flex items-center gap-4 w-1/3">
           <Image src="/logo.png" alt="Logo" width={65} height={65} className="-mr-1 opacity-90" />
           <span className="font-grotesk font-bold text-[30px] tracking-[3px] uppercase text-[#E5B5FF] drop-shadow-[0_0_10px_rgba(176,38,255,0.4)]">
@@ -53,28 +72,62 @@ export default function AdminNavbar() {
           </span>
         </div>
         
-        <div className="hidden lg:flex items-center justify-center gap-10 w-2/3 mt-2">
+        {/* MENU */}
+        <div className="hidden lg:flex items-center justify-center gap-10 w-2/3 mt-2 relative">
           {navLinks.map((link) => {
+            // LOGIKA PENTING: Mencegah menu LOGS menyala saat berada di halaman lain
             const isActive = link.href === "/Dashboard-Admin" 
               ? pathname === link.href 
               : pathname.startsWith(link.href);
 
             return (
-              <Link 
+              <div 
                 key={link.name} 
-                href={link.href} 
-                className={`font-grotesk text-[13px] uppercase tracking-[2px] pb-2 transition-all ${
-                  isActive 
-                    ? "font-bold text-[#E5B5FF] border-b-2 border-[#B026FF]" 
-                    : "text-white/50 hover:text-[#E5B5FF] border-b-2 border-transparent hover:border-[#B026FF]"
-                }`}
+                className="relative group py-4"
+                onMouseEnter={() => setDropdownOpen(link.name)}
+                onMouseLeave={() => setDropdownOpen(null)}
               >
-                {link.name}
-              </Link>
+                <Link 
+                  href={link.href} 
+                  className={`font-grotesk text-[13px] uppercase tracking-[2px] pb-2 transition-all flex items-center gap-1.5 ${
+                    isActive 
+                      ? "font-bold text-[#E5B5FF] border-b-2 border-[#B026FF]" 
+                      : "text-white/50 hover:text-[#E5B5FF] border-b-2 border-transparent hover:border-[#B026FF]"
+                  }`}
+                >
+                  {link.name}
+                  {link.dropdown && <ChevronDown size={14} className="opacity-60 group-hover:rotate-180 transition-transform duration-300" />}
+                </Link>
+
+                {/* ANIMASI DROPDOWN MAP */}
+                <AnimatePresence>
+                  {link.dropdown && dropdownOpen === link.name && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }} 
+                      animate={{ opacity: 1, y: 0 }} 
+                      exit={{ opacity: 0, y: 10 }} 
+                      transition={{ duration: 0.2 }}
+                      className="absolute left-1/2 -translate-x-1/2 top-full mt-0 w-[180px] bg-[#121317] border border-white/10 rounded-lg shadow-[0_15px_40px_rgba(0,0,0,0.8)] z-[100] overflow-hidden flex flex-col"
+                    >
+                      {link.dropdown.map((subItem) => (
+                        <Link 
+                          key={subItem.name} 
+                          href={subItem.href}
+                          onClick={() => setDropdownOpen(null)}
+                          className="px-5 py-3.5 text-[11px] font-mono text-white/60 hover:text-[#E5B5FF] hover:bg-[#B026FF]/20 uppercase tracking-widest transition-colors border-b border-white/5 last:border-none"
+                        >
+                          {subItem.name}
+                        </Link>
+                      ))}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             );
           })}
         </div>
 
+        {/* WAKTU & PROFIL */}
         <div className="flex items-center justify-end gap-6 w-1/3">
           <div suppressHydrationWarning className="border border-[#B026FF]/50 bg-transparent rounded-full px-5 py-2 font-mono text-[11px] text-[#E5B5FF] tracking-widest shadow-[0_0_10px_rgba(176,38,255,0.1)]">
             {currentTime}
@@ -90,8 +143,10 @@ export default function AdminNavbar() {
         </div>
       </nav>
 
+      {/* Garis Bawah Navbar */}
       <div className="w-full h-px bg-white/5 shrink-0 mb-6 mt-[10px]"></div>
 
+      {/* MODAL LOGOUT */}
       <AnimatePresence>
         {showLogoutModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
