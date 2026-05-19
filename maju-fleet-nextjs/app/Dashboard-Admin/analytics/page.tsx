@@ -1,18 +1,36 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { TrendingUp, Activity, BarChart2, MoreVertical, Filter } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import AdminNavbar from "@/components/adminnavbar"; // <--- Import Navbar
+import { useSearchParams, useRouter } from "next/navigation"; 
+import AdminNavbar from "@/components/adminnavbar"; 
 
-export default function AdminAnalyticsPage() {
+function AnalyticsContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  
   const [analyticsChartType, setAnalyticsChartType] = useState<"LINE" | "BAR" | "PIE">("LINE");
   const [isAnalyticsMenuOpen, setIsAnalyticsMenuOpen] = useState(false);
-  
   const [analyticsSidebarTab, setAnalyticsSidebarTab] = useState<"TREND" | "INCOME">("TREND");
-  
   const [isAnalyticsFilterOpen, setIsAnalyticsFilterOpen] = useState(false);
   const [chartTimeFilter, setChartTimeFilter] = useState<"Day" | "Week" | "Month">("Week");
+
+  // MENANGKAP URL DARI NAVBAR
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "INCOME") {
+      setAnalyticsSidebarTab("INCOME");
+    } else {
+      setAnalyticsSidebarTab("TREND");
+    }
+  }, [searchParams]);
+
+  // FUNGSI SAAT TOMBOL SIDEBAR DIKLIK (AGAR URL IKUT BERUBAH)
+  const handleTabChange = (tab: "TREND" | "INCOME") => {
+    setAnalyticsSidebarTab(tab);
+    router.push(`/Dashboard-Admin/analytics?tab=${tab}`);
+  };
 
   const packageStatsData = {
     Day: [{ name: "MAJU ECONOMY", value: 15, color: "#6b21a8" }, { name: "MAJU STANDARD", value: 30, color: "#8b5cf6" }, { name: "MAJU HEAVY", value: 10, color: "#a855f7" }, { name: "MAJU EXPRESS", value: 45, color: "#c084fc" }, { name: "MAJU VIP", value: 25, color: "#e879f9" }],
@@ -23,6 +41,7 @@ export default function AdminAnalyticsPage() {
   const topTrendPackage = currentPackageData.reduce((prev, curr) => prev.value > curr.value ? prev : curr);
   const trendTotalUse = currentPackageData.reduce((acc, curr) => acc + curr.value, 0);
   const trendTopPercentage = ((topTrendPackage.value / trendTotalUse) * 100).toFixed(0);
+  
   let trendPieCurrentAngle = 0;
   const trendConicGradients = currentPackageData.map((stat) => { const angle = (stat.value / trendTotalUse) * 360; const start = trendPieCurrentAngle; trendPieCurrentAngle += angle; return `${stat.color} ${start}deg ${trendPieCurrentAngle}deg`; }).join(", ");
 
@@ -34,6 +53,7 @@ export default function AdminAnalyticsPage() {
   const currentIncomeData = incomeStatsData[chartTimeFilter];
   const topIncomePackage = currentIncomeData.reduce((prev, curr) => prev.value > curr.value ? prev : curr);
   const incomeTotalValue = currentIncomeData.reduce((acc, curr) => acc + curr.value, 0);
+  
   let incomePieCurrentAngle = 0;
   const incomeConicGradients = currentIncomeData.map((stat) => { const angle = (stat.value / incomeTotalValue) * 360; const start = incomePieCurrentAngle; incomePieCurrentAngle += angle; return `${stat.color} ${start}deg ${incomePieCurrentAngle}deg`; }).join(", ");
 
@@ -55,11 +75,7 @@ export default function AdminAnalyticsPage() {
   const currentIncomeTimeData = incomeTimeSeries[chartTimeFilter];
 
   return (
-    <div className="absolute top-0 left-0 w-full h-screen bg-[#0a0a0c] z-50 text-white font-inter selection:bg-[#B026FF] selection:text-white overflow-hidden flex flex-col">
-      
-      {/* Panggil komponen AdminNavbar di sini */}
-      <AdminNavbar />
-
+    <>
       <main className="w-full flex flex-1 overflow-hidden mt-4">
         <div className="flex-1 flex flex-col px-6 md:px-10 overflow-y-auto custom-scrollbar relative z-10 pb-6">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="flex flex-col flex-1 h-full">
@@ -291,10 +307,10 @@ export default function AdminAnalyticsPage() {
                 </div>
               </>
             )}
-
           </motion.div>
         </div>
 
+        {/* SIDEBAR ANALYTICS */}
         <div className="w-[320px] bg-[#0d0d11] border-l border-white/5 h-full p-8 flex flex-col relative z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
           <h2 className="font-grotesk font-bold text-[20px] uppercase tracking-[1px] text-[#E5B5FF] mb-10">ANALYTICS</h2>
           <div className="flex justify-between items-center text-white/40 font-mono text-[10px] tracking-widest uppercase mb-4 border-b border-white/5 pb-4 relative z-[60]">
@@ -312,15 +328,26 @@ export default function AdminAnalyticsPage() {
               </AnimatePresence>
             </div>
           </div>
-          {/* Tanggal manual, menyesuaikan dengan UI jam realtime yang telah dipindah ke navbar */}
           <p className="font-mono text-[11px] text-white/70 tracking-widest uppercase mb-10">LAST UPDATE: <br/> <span className="text-white font-bold mt-1 inline-block">2026-04-15</span></p>
           <div className="flex flex-col gap-2">
-            <button onClick={() => setAnalyticsSidebarTab("TREND")} className={`flex items-center gap-4 px-4 py-4 rounded-lg font-mono text-[11px] tracking-widest uppercase transition-all text-left ${analyticsSidebarTab === "TREND" ? "bg-[#B026FF]/10 border-l-2 border-[#B026FF] text-[#E5B5FF] font-bold" : "text-white/40 hover:bg-white/5 hover:text-white"}`}><TrendingUp size={16} /> PACKAGE TREND</button>
-            <button onClick={() => setAnalyticsSidebarTab("INCOME")} className={`flex items-center gap-4 px-4 py-4 rounded-lg font-mono text-[11px] tracking-widest uppercase transition-all text-left ${analyticsSidebarTab === "INCOME" ? "bg-[#B026FF]/10 border-l-2 border-[#B026FF] text-[#E5B5FF] font-bold" : "text-white/40 hover:bg-white/5 hover:text-white"}`}><Activity size={16} /> AVERAGE INCOME</button>
+            {/* INI YANG DIUBAH AGAR MENGGUNAKAN FUNGSI handleTabChange */}
+            <button onClick={() => handleTabChange("TREND")} className={`flex items-center gap-4 px-4 py-4 rounded-lg font-mono text-[11px] tracking-widest uppercase transition-all text-left ${analyticsSidebarTab === "TREND" ? "bg-[#B026FF]/10 border-l-2 border-[#B026FF] text-[#E5B5FF] font-bold" : "text-white/40 hover:bg-white/5 hover:text-white"}`}><TrendingUp size={16} /> PACKAGE TREND</button>
+            <button onClick={() => handleTabChange("INCOME")} className={`flex items-center gap-4 px-4 py-4 rounded-lg font-mono text-[11px] tracking-widest uppercase transition-all text-left ${analyticsSidebarTab === "INCOME" ? "bg-[#B026FF]/10 border-l-2 border-[#B026FF] text-[#E5B5FF] font-bold" : "text-white/40 hover:bg-white/5 hover:text-white"}`}><Activity size={16} /> AVERAGE INCOME</button>
           </div>
         </div>
       </main>
+    </>
+  );
+}
 
+// WRAPPER UTAMA
+export default function AdminAnalyticsPage() {
+  return (
+    <div className="absolute top-0 left-0 w-full h-screen bg-[#0a0a0c] z-50 text-white font-inter selection:bg-[#B026FF] selection:text-white overflow-hidden flex flex-col">
+      <AdminNavbar />
+      <Suspense fallback={<div className="flex-1 flex items-center justify-center text-white/50">Loading Analytics...</div>}>
+        <AnalyticsContent />
+      </Suspense>
       <style jsx global>{`.custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: transparent; } .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(176, 38, 255, 0.5); }`}</style>
     </div>
   );
