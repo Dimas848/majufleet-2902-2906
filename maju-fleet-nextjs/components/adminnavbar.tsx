@@ -33,7 +33,16 @@ export default function AdminNavbar() {
   const handleLogout = () => router.push("/");
 
   const navLinks = [
-    { name: "FLEET", href: "/Dashboard-Admin/fleet" },
+    { 
+      name: "FLEET", 
+      href: "/Dashboard-Admin/fleet",
+      // Dropdown disamakan persis seperti MAP
+      dropdown: [
+        { name: "FULL OVERVIEW", href: "/Dashboard-Admin/fleet?view=full" },
+        { name: "ANALYTICS", href: "/Dashboard-Admin/fleet?view=stats" },
+        { name: "DELIVERY LIST", href: "/Dashboard-Admin/fleet?view=list" }
+      ]
+    },
     { 
       name: "MAP", 
       href: "/Dashboard-Admin/map",
@@ -75,7 +84,6 @@ export default function AdminNavbar() {
         {/* MENU */}
         <div className="hidden lg:flex items-center justify-center gap-10 w-2/3 mt-2 relative">
           {navLinks.map((link) => {
-            // LOGIKA PENTING: Mencegah menu LOGS menyala saat berada di halaman lain
             const isActive = link.href === "/Dashboard-Admin" 
               ? pathname === link.href 
               : pathname.startsWith(link.href);
@@ -96,10 +104,10 @@ export default function AdminNavbar() {
                   }`}
                 >
                   {link.name}
-                  {link.dropdown && <ChevronDown size={14} className="opacity-60 group-hover:rotate-180 transition-transform duration-300" />}
+                  {link.dropdown && <ChevronDown size={14} className={`transition-transform duration-300 ${dropdownOpen === link.name ? 'rotate-180 text-[#B026FF]' : 'opacity-60'}`} />}
                 </Link>
 
-                {/* ANIMASI DROPDOWN MAP */}
+                {/* ANIMASI DROPDOWN */}
                 <AnimatePresence>
                   {link.dropdown && dropdownOpen === link.name && (
                     <motion.div 
