@@ -1,10 +1,55 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect } from "react";
 import { TrendingUp, Activity, BarChart2, MoreVertical, Filter } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams, useRouter } from "next/navigation"; 
 import AdminNavbar from "@/components/adminnavbar"; 
+
+function AnalyticsSkeleton() {
+  return (
+    <div className="w-full flex flex-1 overflow-hidden mt-4 animate-pulse">
+      <div className="flex-1 flex flex-col px-6 md:px-10 overflow-y-auto relative z-10 pb-6">
+        <div className="h-10 w-72 bg-white/10 rounded mb-8 mt-2"></div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="bg-[#121317]/60 border border-white/5 p-6 rounded-lg h-[150px] flex flex-col justify-between">
+              <div className="h-3 w-32 bg-white/10 rounded"></div>
+              <div className="h-10 w-24 bg-white/20 rounded"></div>
+              <div className="h-3 w-40 bg-white/10 rounded mt-2"></div>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-[#121317]/40 border border-white/5 rounded-xl p-8 flex flex-col flex-1 min-h-[300px]">
+          <div className="flex justify-between items-start mb-6">
+            <div className="h-5 w-64 bg-white/10 rounded"></div>
+            <div className="flex gap-4">
+              <div className="h-4 w-28 bg-white/10 rounded"></div>
+              <div className="h-5 w-5 bg-white/10 rounded"></div>
+            </div>
+          </div>
+          <div className="flex-1 w-full bg-white/5 rounded-lg mt-4"></div>
+          <div className="h-4 w-full bg-white/5 rounded mt-6"></div>
+        </div>
+      </div>
+
+      <div className="w-[320px] bg-[#0d0d11] border-l border-white/5 h-full p-8 flex flex-col">
+        <div className="h-6 w-32 bg-white/10 rounded mb-10"></div>
+        <div className="flex justify-between items-center mb-10 border-b border-white/5 pb-4">
+          <div className="h-3 w-16 bg-white/10 rounded"></div>
+          <div className="h-4 w-4 bg-white/10 rounded"></div>
+        </div>
+        <div className="h-8 w-24 bg-white/10 rounded mb-10"></div>
+        <div className="flex flex-col gap-3">
+          <div className="h-14 w-full bg-white/10 rounded-lg"></div>
+          <div className="h-14 w-full bg-white/10 rounded-lg"></div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AnalyticsContent() {
   const searchParams = useSearchParams();
@@ -16,7 +61,6 @@ function AnalyticsContent() {
   const [isAnalyticsFilterOpen, setIsAnalyticsFilterOpen] = useState(false);
   const [chartTimeFilter, setChartTimeFilter] = useState<"Day" | "Week" | "Month">("Week");
 
-  // MENANGKAP URL DARI NAVBAR
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     if (tabParam === "INCOME") {
@@ -26,7 +70,6 @@ function AnalyticsContent() {
     }
   }, [searchParams]);
 
-  // FUNGSI SAAT TOMBOL SIDEBAR DIKLIK (AGAR URL IKUT BERUBAH)
   const handleTabChange = (tab: "TREND" | "INCOME") => {
     setAnalyticsSidebarTab(tab);
     router.push(`/Dashboard-Admin/analytics?tab=${tab}`);
@@ -310,7 +353,6 @@ function AnalyticsContent() {
           </motion.div>
         </div>
 
-        {/* SIDEBAR ANALYTICS */}
         <div className="w-[320px] bg-[#0d0d11] border-l border-white/5 h-full p-8 flex flex-col relative z-20 shadow-[-10px_0_30px_rgba(0,0,0,0.5)]">
           <h2 className="font-grotesk font-bold text-[20px] uppercase tracking-[1px] text-[#E5B5FF] mb-10">ANALYTICS</h2>
           <div className="flex justify-between items-center text-white/40 font-mono text-[10px] tracking-widest uppercase mb-4 border-b border-white/5 pb-4 relative z-[60]">
@@ -330,7 +372,6 @@ function AnalyticsContent() {
           </div>
           <p className="font-mono text-[11px] text-white/70 tracking-widest uppercase mb-10">LAST UPDATE: <br/> <span className="text-white font-bold mt-1 inline-block">2026-04-15</span></p>
           <div className="flex flex-col gap-2">
-            {/* INI YANG DIUBAH AGAR MENGGUNAKAN FUNGSI handleTabChange */}
             <button onClick={() => handleTabChange("TREND")} className={`flex items-center gap-4 px-4 py-4 rounded-lg font-mono text-[11px] tracking-widest uppercase transition-all text-left ${analyticsSidebarTab === "TREND" ? "bg-[#B026FF]/10 border-l-2 border-[#B026FF] text-[#E5B5FF] font-bold" : "text-white/40 hover:bg-white/5 hover:text-white"}`}><TrendingUp size={16} /> PACKAGE TREND</button>
             <button onClick={() => handleTabChange("INCOME")} className={`flex items-center gap-4 px-4 py-4 rounded-lg font-mono text-[11px] tracking-widest uppercase transition-all text-left ${analyticsSidebarTab === "INCOME" ? "bg-[#B026FF]/10 border-l-2 border-[#B026FF] text-[#E5B5FF] font-bold" : "text-white/40 hover:bg-white/5 hover:text-white"}`}><Activity size={16} /> AVERAGE INCOME</button>
           </div>
@@ -340,14 +381,26 @@ function AnalyticsContent() {
   );
 }
 
-// WRAPPER UTAMA
 export default function AdminAnalyticsPage() {
+  const [isLoading, setIsLoading] = useState(true); 
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 2000);
+    return () => clearTimeout(timer); 
+  }, []);
+
   return (
     <div className="absolute top-0 left-0 w-full h-screen bg-[#0a0a0c] z-50 text-white font-inter selection:bg-[#B026FF] selection:text-white overflow-hidden flex flex-col">
       <AdminNavbar />
-      <Suspense fallback={<div className="flex-1 flex items-center justify-center text-white/50">Loading Analytics...</div>}>
+      
+      {isLoading ? (
+        <AnalyticsSkeleton />
+      ) : (
         <AnalyticsContent />
-      </Suspense>
+      )}
+
       <style jsx global>{`.custom-scrollbar::-webkit-scrollbar { width: 4px; } .custom-scrollbar::-webkit-scrollbar-track { background: transparent; } .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(176, 38, 255, 0.5); }`}</style>
     </div>
   );

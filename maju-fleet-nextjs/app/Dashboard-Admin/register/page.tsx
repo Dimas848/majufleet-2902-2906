@@ -1,10 +1,39 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect } from "react";
 import { Hash, Users, MapPin, Package, RefreshCw, Briefcase, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSearchParams } from "next/navigation"; // <--- Import ini
-import AdminNavbar from "@/components/adminnavbar"; 
+import { useSearchParams } from "next/navigation";
+import AdminNavbar from "@/components/adminnavbar";
+
+function RegisterSkeleton() {
+  return (
+    <main className="w-full px-6 md:px-10 relative z-10 flex flex-col gap-8 max-w-[900px] mx-auto pb-10 mt-6 animate-pulse">
+      <div className="mb-10">
+        <div className="h-10 w-[350px] bg-white/10 rounded mb-2"></div>
+        <div className="h-1 w-[350px] bg-[#B026FF]/30 rounded"></div>
+      </div>
+      <div className="flex flex-col gap-10">
+        <div>
+          <div className="h-6 w-48 bg-white/10 rounded mb-6"></div>
+          <div className="flex gap-6 items-end">
+            <div className="flex-1 h-12 bg-white/5 border-b border-white/10 rounded-t"></div>
+            <div className="w-40 h-12 bg-white/10 rounded"></div>
+          </div>
+        </div>
+        <div>
+          <div className="h-6 w-48 bg-white/10 rounded mb-6"></div>
+          <div className="grid grid-cols-2 gap-x-8 gap-y-8">
+            <div className="col-span-2 h-12 bg-white/5 border-b border-white/10 rounded-t"></div>
+            <div className="h-12 bg-white/5 border-b border-white/10 rounded-t"></div>
+            <div className="h-12 bg-white/5 border-b border-white/10 rounded-t"></div>
+          </div>
+        </div>
+        <div className="h-14 w-full bg-white/10 rounded-md mt-4"></div>
+      </div>
+    </main>
+  );
+}
 
 function RegisterContent() {
   const searchParams = useSearchParams();
@@ -12,7 +41,6 @@ function RegisterContent() {
   const [trackingCode, setTrackingCode] = useState("");
   const [crewCode, setCrewCode] = useState("");
 
-  // MENDETEKSI PERUBAHAN URL DARI DROPDOWN NAVBAR
   useEffect(() => {
     const typeParam = searchParams.get("type");
     if (typeParam === "crew") {
@@ -36,7 +64,6 @@ function RegisterContent() {
     <main className="w-full px-6 md:px-10 relative z-10 flex flex-col gap-8 max-w-[900px] mx-auto pb-10 mt-6">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="bg-transparent pb-4">
         
-        {/* JUDUL STATIS: Berubah Otomatis Sesuai Tab yang Dipilih */}
         <div className="mb-10">
           <h1 className="font-grotesk font-bold text-[36px] md:text-[42px] tracking-[2px] uppercase text-white border-b-4 border-[#B026FF] pb-2 inline-block">
             {regType === "fleet" ? "FLEET REGISTRATION" : "CREW REGISTRATION"}
@@ -45,7 +72,6 @@ function RegisterContent() {
 
         <AnimatePresence mode="wait">
           {regType === "fleet" ? (
-            /* ======================= FLEET REGISTRATION FORM ======================= */
             <motion.div 
               key="fleet-form"
               initial={{ opacity: 0, x: -20 }} 
@@ -53,7 +79,6 @@ function RegisterContent() {
               exit={{ opacity: 0, x: 20 }} 
               transition={{ duration: 0.3 }}
             >
-              {/* TRACKING NUMBER */}
               <div className="mb-10">
                 <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
                   <Hash size={20} /> TRACKING NUMBER
@@ -69,7 +94,6 @@ function RegisterContent() {
                 </div>
               </div>
 
-              {/* CREW INFORMATION */}
               <div className="mb-10">
                 <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
                   <Users size={20} /> CREW INFORMATION
@@ -80,7 +104,6 @@ function RegisterContent() {
                 </div>
               </div>
 
-              {/* SENDER INFORMATION */}
               <div className="mb-10">
                 <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
                   <MapPin size={20} /> SENDER INFORMATION
@@ -109,7 +132,6 @@ function RegisterContent() {
                 </div>
               </div>
 
-              {/* RECIPIENT INFORMATION */}
               <div className="mb-10">
                 <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
                   <MapPin size={20} /> RECIPIENT INFORMATION
@@ -138,7 +160,6 @@ function RegisterContent() {
                 </div>
               </div>
 
-              {/* CARGO DETAILS */}
               <div className="mb-10">
                 <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
                   <Package size={20} /> CARGO DETAILS
@@ -179,8 +200,6 @@ function RegisterContent() {
               </button>
             </motion.div>
           ) : (
-
-            /* ======================= CREW REGISTRATION FORM ======================= */
             <motion.div 
               key="crew-form"
               initial={{ opacity: 0, x: 20 }} 
@@ -188,7 +207,6 @@ function RegisterContent() {
               exit={{ opacity: 0, x: -20 }} 
               transition={{ duration: 0.3 }}
             >
-              {/* CREW ID */}
               <div className="mb-10">
                 <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
                   <Hash size={20} /> CREW IDENTIFICATION
@@ -204,7 +222,6 @@ function RegisterContent() {
                 </div>
               </div>
 
-              {/* PERSONAL DETAILS */}
               <div className="mb-10">
                 <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
                   <Users size={20} /> PERSONAL DETAILS
@@ -234,7 +251,6 @@ function RegisterContent() {
                 </div>
               </div>
 
-              {/* PROFESSIONAL DETAILS */}
               <div className="mb-10">
                 <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
                   <Briefcase size={20} /> PROFESSIONAL DETAILS
@@ -278,14 +294,24 @@ function RegisterContent() {
   );
 }
 
-// WRAPPER UTAMA
 export default function AdminRegisterPage() {
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
     <div className="absolute top-0 left-0 w-full min-h-screen bg-[#0a0a0c] z-50 text-white font-inter selection:bg-[#B026FF] selection:text-white pb-10 flex flex-col">
       <AdminNavbar />
-      <Suspense fallback={<div className="flex-1 flex items-center justify-center text-white/50">Loading Form...</div>}>
+      {isLoading ? (
+        <RegisterSkeleton />
+      ) : (
         <RegisterContent />
-      </Suspense>
+      )}
     </div>
   );
 }

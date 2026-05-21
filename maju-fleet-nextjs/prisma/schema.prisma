@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int        @id @default(autoincrement())
+  name      String
+  email     String     @unique
+  phone     String
+  shipments Shipment[]
+}
+
+model Vessel {
+  id        Int        @id @default(autoincrement())
+  name      String
+  capacity  Float
+  crew_lead String
+  shipments Shipment[]
+}
+
+model Port {
+  id              Int        @id @default(autoincrement())
+  name            String
+  country         String
+  destShipments   Shipment[] @relation("DestPort")
+  originShipments Shipment[] @relation("OriginPort")
+}
+
+model PackageType {
+  id            Int            @id @default(autoincrement())
+  name          String
+  base_price    Float
+  shipmentItems ShipmentItem[]
+}
+
+model Shipment {
+  id             Int             @id @default(autoincrement())
+  receipt_number String          @unique
+  status         String
+  book_date      DateTime        @default(now())
+  userId         Int
+  vesselId       Int
+  originId       Int
+  destId         Int
+  destPort       Port            @relation("DestPort", fields: [destId], references: [id])
+  originPort     Port            @relation("OriginPort", fields: [originId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
+  vessel         Vessel          @relation(fields: [vesselId], references: [id])
+  detail         ShipmentDetail?
+  items          ShipmentItem[]
+}
+
+model ShipmentDetail {
+  id          Int      @id @default(autoincrement())
+  shipmentId  Int      @unique
+  current_lat Float
+  current_lng Float
+  speed_knots Float
+  est_arrival DateTime
+  shipment    Shipment @relation(fields: [shipmentId], references: [id])
+}
+
+model ShipmentItem {
+  shipmentId    Int
+  packageTypeId Int
+  weight_kg     Float
+  description   String
+  packageType   PackageType @relation(fields: [packageTypeId], references: [id])
+  shipment      Shipment    @relation(fields: [shipmentId], references: [id])
+
+  @@id([shipmentId, packageTypeId])
+}
