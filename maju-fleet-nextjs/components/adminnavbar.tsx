@@ -36,7 +36,6 @@ export default function AdminNavbar() {
     { 
       name: "FLEET", 
       href: "/Dashboard-Admin/fleet",
-      // Dropdown disamakan persis seperti MAP
       dropdown: [
         { name: "FULL OVERVIEW", href: "/Dashboard-Admin/fleet?view=full" },
         { name: "ANALYTICS", href: "/Dashboard-Admin/fleet?view=stats" },
@@ -60,10 +59,12 @@ export default function AdminNavbar() {
       ]
     },
     { 
-      name: "REGISTER", 
+      name: "CONSOLE", 
       href: "/Dashboard-Admin/register",
       dropdown: [
         { name: "FLEET REGISTRATION", href: "/Dashboard-Admin/register?type=fleet" },
+        { name: "CUSTOMER REGISTRATION", href: "/Dashboard-Admin/register?type=customer" },
+        { name: "VESSEL REGISTRATION", href: "/Dashboard-Admin/register?type=vessel" },
         { name: "CREW REGISTRATION", href: "/Dashboard-Admin/register?type=crew" }
       ]
     },
@@ -73,7 +74,6 @@ export default function AdminNavbar() {
   return (
     <>
       <nav className="sticky top-0 z-50 h-[80px] flex items-center justify-between px-6 md:px-10 bg-[#0a0a0c]">
-        {/* LOGO */}
         <div className="flex items-center gap-4 w-1/3">
           <Image src="/logo.png" alt="Logo" width={65} height={65} className="-mr-1 opacity-90" />
           <span className="font-grotesk font-bold text-[30px] tracking-[3px] uppercase text-[#E5B5FF] drop-shadow-[0_0_10px_rgba(176,38,255,0.4)]">
@@ -81,7 +81,6 @@ export default function AdminNavbar() {
           </span>
         </div>
         
-        {/* MENU */}
         <div className="hidden lg:flex items-center justify-center gap-10 w-2/3 mt-2 relative">
           {navLinks.map((link) => {
             const isActive = link.href === "/Dashboard-Admin" 
@@ -107,7 +106,6 @@ export default function AdminNavbar() {
                   {link.dropdown && <ChevronDown size={14} className={`transition-transform duration-300 ${dropdownOpen === link.name ? 'rotate-180 text-[#B026FF]' : 'opacity-60'}`} />}
                 </Link>
 
-                {/* ANIMASI DROPDOWN */}
                 <AnimatePresence>
                   {link.dropdown && dropdownOpen === link.name && (
                     <motion.div 
@@ -115,7 +113,7 @@ export default function AdminNavbar() {
                       animate={{ opacity: 1, y: 0 }} 
                       exit={{ opacity: 0, y: 10 }} 
                       transition={{ duration: 0.2 }}
-                      className="absolute left-1/2 -translate-x-1/2 top-full mt-0 w-[180px] bg-[#121317] border border-white/10 rounded-lg shadow-[0_15px_40px_rgba(0,0,0,0.8)] z-[100] overflow-hidden flex flex-col"
+                      className="absolute left-1/2 -translate-x-1/2 top-full mt-0 min-w-[200px] w-auto bg-[#121317] border border-white/10 rounded-lg shadow-[0_15px_40px_rgba(0,0,0,0.8)] z-[100] overflow-hidden flex flex-col whitespace-nowrap"
                     >
                       {link.dropdown.map((subItem) => (
                         <Link 
@@ -135,7 +133,6 @@ export default function AdminNavbar() {
           })}
         </div>
 
-        {/* WAKTU & PROFIL */}
         <div className="flex items-center justify-end gap-6 w-1/3">
           <div suppressHydrationWarning className="border border-[#B026FF]/50 bg-transparent rounded-full px-5 py-2 font-mono text-[11px] text-[#E5B5FF] tracking-widest shadow-[0_0_10px_rgba(176,38,255,0.1)]">
             {currentTime}
@@ -151,10 +148,8 @@ export default function AdminNavbar() {
         </div>
       </nav>
 
-      {/* Garis Bawah Navbar */}
       <div className="w-full h-px bg-white/5 shrink-0 mb-6 mt-[10px]"></div>
 
-      {/* MODAL LOGOUT */}
       <AnimatePresence>
         {showLogoutModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">

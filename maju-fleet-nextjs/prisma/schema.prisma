@@ -2,76 +2,123 @@ generator client {
   provider = "prisma-client-js"
 }
 
+
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
   id        Int        @id @default(autoincrement())
   name      String
   email     String     @unique
-  phone     String
+  password  String?    @default("maju123") // Kolom password manual wajib ada di sini
+  phone     String?
+  
+  // Tambahan untuk Crew & Customer dari UI baru
+  role      String     @default("customer") // "customer", "captain", "navigator", dll
+  gender    String?    // "male", "female"
+  age       Int?
+  origin    String?
+  address   String?
+  status    String     @default("Active") // "Active", "Inactive"
+
   shipments Shipment[]
 }
 
 model Vessel {
-  id        Int        @id @default(autoincrement())
-  name      String
-  capacity  Float
-  crew_lead String
-  shipments Shipment[]
+  id           Int        @id @default(autoincrement())
+  name         String
+  capacity     Int
+  
+  // Tambahan untuk Vessel dari UI baru
+  capacityUnit String     @default("TONNES") // "TONNES", "KG", "CBM"
+  type         String?    // "Cargo", dll
+  crewLead     String?
+  status       String     @default("Active") // "Active", "Maintenance", "Docked"
+
+  shipments    Shipment[]
 }
 
 model Port {
-  id              Int        @id @default(autoincrement())
-  name            String
-  country         String
-  destShipments   Shipment[] @relation("DestPort")
+  id      Int        @id @default(autoincrement())
+  name    String
+  country String
+  
   originShipments Shipment[] @relation("OriginPort")
-}
-
-model PackageType {
-  id            Int            @id @default(autoincrement())
-  name          String
-  base_price    Float
-  shipmentItems ShipmentItem[]
+  destShipments   Shipment[] @relation("DestPort")
 }
 
 model Shipment {
-  id             Int             @id @default(autoincrement())
-  receipt_number String          @unique
-  status         String
-  book_date      DateTime        @default(now())
-  userId         Int
-  vesselId       Int
-  originId       Int
-  destId         Int
-  destPort       Port            @relation("DestPort", fields: [destId], references: [id])
-  originPort     Port            @relation("OriginPort", fields: [originId], references: [id])
-  user           User            @relation(fields: [userId], references: [id])
-  vessel         Vessel          @relation(fields: [vesselId], references: [id])
-  detail         ShipmentDetail?
+  id             Int      @id @default(autoincrement())
+  receipt_number String   @unique
+  status         String   @default("PENDING")
+  book_date      DateTime @default(now())
+  captain        String?
+
+
+  // Relasi Master (Bisa opsional jika diisi manual dari form)
+  userId         Int?
+  user           User?    @relation(fields: [userId], references: [id])
+  vesselId       Int?
+  vessel         Vessel?  @relation(fields: [vesselId], references: [id])
+  originId       Int?
+  origin         Port?    @relation("OriginPort", fields: [originId], references: [id])
+  destId         Int?
+  dest           Port?    @relation("DestPort", fields: [destId], references: [id])
+
+  // Data Pengirim (Dari UI Form Baru)
+  senderName     String?
+  senderContact  String?
+  senderEmail    String?
+  senderAddress  String?
+  senderCountry  String?
+  senderCity     String?
+
+  // Data Penerima (Dari UI Form Baru)
+  recipientName    String?
+  recipientContact String?
+  recipientEmail   String?
+  recipientAddress String?
+  recipientCountry String?
+  recipientCity    String?
+
+  // Detail Kargo (Dari UI Form Baru)
+  cargoDesc      String?
+  weight         Float?
+  weightUnit     String   @default("KG") // "KG", "TON", "LBS"
+  dimensions     Float?
+  category       String?
+
   items          ShipmentItem[]
+  details        ShipmentDetail[]
+}
+
+model PackageType {
+  id         Int    @id @default(autoincrement())
+  name       String
+  base_price Int
+  items      ShipmentItem[]
+}
+
+model ShipmentItem {
+  id            Int      @id @default(autoincrement())
+  shipmentId    Int
+  packageTypeId Int
+  weight_kg     Float
+  description   String?
+
+  shipment      Shipment    @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  packageType   PackageType @relation(fields: [packageTypeId], references: [id])
 }
 
 model ShipmentDetail {
   id          Int      @id @default(autoincrement())
-  shipmentId  Int      @unique
-  current_lat Float
-  current_lng Float
-  speed_knots Float
-  est_arrival DateTime
-  shipment    Shipment @relation(fields: [shipmentId], references: [id])
-}
+  shipmentId  Int
+  current_lat Float?
+  current_lng Float?
+  update_time DateTime @default(now())
 
-model ShipmentItem {
-  shipmentId    Int
-  packageTypeId Int
-  weight_kg     Float
-  description   String
-  packageType   PackageType @relation(fields: [packageTypeId], references: [id])
-  shipment      Shipment    @relation(fields: [shipmentId], references: [id])
-
-  @@id([shipmentId, packageTypeId])
+  shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 }

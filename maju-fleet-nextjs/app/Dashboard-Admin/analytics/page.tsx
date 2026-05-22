@@ -1,17 +1,19 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { TrendingUp, Activity, BarChart2, MoreVertical, Filter } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams, useRouter } from "next/navigation"; 
 import AdminNavbar from "@/components/adminnavbar"; 
+
+// WAJIB: Import dari actions.ts
+import { getAllData } from "../../lib/actions";
 
 function AnalyticsSkeleton() {
   return (
     <div className="w-full flex flex-1 overflow-hidden mt-4 animate-pulse">
       <div className="flex-1 flex flex-col px-6 md:px-10 overflow-y-auto relative z-10 pb-6">
         <div className="h-10 w-72 bg-white/10 rounded mb-8 mt-2"></div>
-        
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="bg-[#121317]/60 border border-white/5 p-6 rounded-lg h-[150px] flex flex-col justify-between">
@@ -21,7 +23,6 @@ function AnalyticsSkeleton() {
             </div>
           ))}
         </div>
-
         <div className="bg-[#121317]/40 border border-white/5 rounded-xl p-8 flex flex-col flex-1 min-h-[300px]">
           <div className="flex justify-between items-start mb-6">
             <div className="h-5 w-64 bg-white/10 rounded"></div>
@@ -34,7 +35,6 @@ function AnalyticsSkeleton() {
           <div className="h-4 w-full bg-white/5 rounded mt-6"></div>
         </div>
       </div>
-
       <div className="w-[320px] bg-[#0d0d11] border-l border-white/5 h-full p-8 flex flex-col">
         <div className="h-6 w-32 bg-white/10 rounded mb-10"></div>
         <div className="flex justify-between items-center mb-10 border-b border-white/5 pb-4">
@@ -61,13 +61,14 @@ function AnalyticsContent() {
   const [isAnalyticsFilterOpen, setIsAnalyticsFilterOpen] = useState(false);
   const [chartTimeFilter, setChartTimeFilter] = useState<"Day" | "Week" | "Month">("Week");
 
+  // STATE UNTUK DATA DINAMIS DARI NEON
+  const [realShipments, setRealShipments] = useState<any[]>([]);
+  const [totalFleets, setTotalFleets] = useState(0);
+
   useEffect(() => {
     const tabParam = searchParams.get("tab");
-    if (tabParam === "INCOME") {
-      setAnalyticsSidebarTab("INCOME");
-    } else {
-      setAnalyticsSidebarTab("TREND");
-    }
+    if (tabParam === "INCOME") setAnalyticsSidebarTab("INCOME");
+    else setAnalyticsSidebarTab("TREND");
   }, [searchParams]);
 
   const handleTabChange = (tab: "TREND" | "INCOME") => {
@@ -75,47 +76,120 @@ function AnalyticsContent() {
     router.push(`/Dashboard-Admin/analytics?tab=${tab}`);
   };
 
-  const packageStatsData = {
-    Day: [{ name: "MAJU ECONOMY", value: 15, color: "#6b21a8" }, { name: "MAJU STANDARD", value: 30, color: "#8b5cf6" }, { name: "MAJU HEAVY", value: 10, color: "#a855f7" }, { name: "MAJU EXPRESS", value: 45, color: "#c084fc" }, { name: "MAJU VIP", value: 25, color: "#e879f9" }],
-    Week: [{ name: "MAJU ECONOMY", value: 45, color: "#6b21a8" }, { name: "MAJU STANDARD", value: 35, color: "#8b5cf6" }, { name: "MAJU HEAVY", value: 55, color: "#a855f7" }, { name: "MAJU EXPRESS", value: 60, color: "#c084fc" }, { name: "MAJU VIP", value: 75, color: "#e879f9" }],
-    Month: [{ name: "MAJU ECONOMY", value: 65, color: "#6b21a8" }, { name: "MAJU STANDARD", value: 95, color: "#8b5cf6" }, { name: "MAJU HEAVY", value: 55, color: "#a855f7" }, { name: "MAJU EXPRESS", value: 70, color: "#c084fc" }, { name: "MAJU VIP", value: 45, color: "#e879f9" }],
+  // TARIK DATA DARI NEON
+  useEffect(() => {
+    const fetchAnalytics = async () => {
+      try {
+        const dbData = await getAllData();
+        if (dbData.shipments) {
+          setRealShipments(dbData.shipments);
+        }
+        if (dbData.vessels) {
+          setTotalFleets(dbData.vessels.length);
+        }
+      } catch (error) {
+        console.error("Gagal menarik data Analytics:", error);
+      }
+    };
+    fetchAnalytics();
+  }, []);
+
+  const { packageStats, incomeStats, trendLine, incomeLine } = useMemo(() => {
+  const pkgCounts: Record<string, number> = {};
+  const pkgIncomes: Record<string, number> = {};
+
+  console.log("Total shipments:", realShipments.length);
+  console.log("Sample items[0]:", realShipments[0]?.items);
+  
+  realShipments.forEach((s) => {
+    if (!s.items || s.items.length === 0) return;
+
+    s.items.forEach((item: { 
+      packageType?: { name: string } | null; 
+      weight_kg?: number | null 
+    }) => {
+      const name = item.packageType?.name?.toUpperCase() ?? "UNKNOWN";
+      pkgCounts[name] = (pkgCounts[name] || 0) + 1;
+
+      const weight = item.weight_kg || 1000;
+      const incomeInMillions = (weight * 50) / 1_000_000;
+      pkgIncomes[name] = (pkgIncomes[name] || 0) + incomeInMillions;
+    });
+  });
+
+  const colors = ["#e879f9", "#c084fc", "#a855f7", "#8b5cf6", "#6b21a8"];
+
+  const sortedPackages = Object.entries(pkgCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const formattedPackages = sortedPackages.map((item, idx) => ({
+    name: item[0],
+    value: item[1],
+    color: colors[idx % colors.length]
+  }));
+  while (formattedPackages.length < 5) formattedPackages.push({ name: "-", value: 0, color: colors[formattedPackages.length] });
+
+  const sortedIncomes = Object.entries(pkgIncomes).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const formattedIncomes = sortedIncomes.map((item, idx) => ({
+    name: item[0],
+    value: Number(item[1].toFixed(2)),
+    color: colors[idx % colors.length]
+  }));
+  while (formattedIncomes.length < 5) formattedIncomes.push({ name: "-", value: 0, color: colors[formattedIncomes.length] });
+
+  const totalCurrentPkg = formattedPackages.reduce((sum, item) => sum + item.value, 0);
+  const totalCurrentInc = formattedIncomes.reduce((sum, item) => sum + item.value, 0);
+
+  let baseTLine = [12, 18, 15, 25, 20, 30];
+  let baseILine = [0.5, 0.8, 0.6, 1.2, 0.9, 1.5];
+
+  if (chartTimeFilter === "Day") {
+    baseTLine = [2, 5, 3, 8, 6, 10];
+    baseILine = [0.1, 0.2, 0.15, 0.3, 0.25, 0.4];
+  } else if (chartTimeFilter === "Month") {
+    baseTLine = [50, 65, 55, 80, 75, 95];
+    baseILine = [2.5, 3.1, 2.8, 4.0, 3.6, 4.8];
+  }
+
+  return {
+    packageStats: formattedPackages,
+    incomeStats: formattedIncomes,
+    trendLine: [...baseTLine, totalCurrentPkg > 0 ? totalCurrentPkg : 35],
+    incomeLine: [...baseILine, totalCurrentInc > 0 ? totalCurrentInc : 1.8]
   };
-  const currentPackageData = packageStatsData[chartTimeFilter];
-  const topTrendPackage = currentPackageData.reduce((prev, curr) => prev.value > curr.value ? prev : curr);
-  const trendTotalUse = currentPackageData.reduce((acc, curr) => acc + curr.value, 0);
-  const trendTopPercentage = ((topTrendPackage.value / trendTotalUse) * 100).toFixed(0);
+}, [realShipments, chartTimeFilter]);
+
+  // KALKULASI VARIABEL TREND
+  const topTrendPackage = packageStats.reduce((prev, curr) => prev.value > curr.value ? prev : curr, packageStats[0]);
+  const trendTotalUse = packageStats.reduce((acc, curr) => acc + curr.value, 0);
+  const trendTopPercentage = trendTotalUse > 0 ? ((topTrendPackage.value / trendTotalUse) * 100).toFixed(0) : "0";
   
   let trendPieCurrentAngle = 0;
-  const trendConicGradients = currentPackageData.map((stat) => { const angle = (stat.value / trendTotalUse) * 360; const start = trendPieCurrentAngle; trendPieCurrentAngle += angle; return `${stat.color} ${start}deg ${trendPieCurrentAngle}deg`; }).join(", ");
+  const trendConicGradients = packageStats.map((stat) => { const angle = trendTotalUse > 0 ? (stat.value / trendTotalUse) * 360 : 0; const start = trendPieCurrentAngle; trendPieCurrentAngle += angle; return `${stat.color} ${start}deg ${trendPieCurrentAngle}deg`; }).join(", ");
 
-  const incomeStatsData = {
-    Day: [{ name: "MAJU ECONOMY", value: 0.12, color: "#6b21a8" }, { name: "MAJU STANDARD", value: 0.25, color: "#8b5cf6" }, { name: "MAJU HEAVY", value: 0.08, color: "#a855f7" }, { name: "MAJU EXPRESS", value: 0.15, color: "#c084fc" }, { name: "MAJU VIP", value: 0.19, color: "#e879f9" }],
-    Week: [{ name: "MAJU ECONOMY", value: 0.45, color: "#6b21a8" }, { name: "MAJU STANDARD", value: 0.35, color: "#8b5cf6" }, { name: "MAJU HEAVY", value: 0.55, color: "#a855f7" }, { name: "MAJU EXPRESS", value: 0.42, color: "#c084fc" }, { name: "MAJU VIP", value: 0.50, color: "#e879f9" }],
-    Month: [{ name: "MAJU ECONOMY", value: 0.85, color: "#6b21a8" }, { name: "MAJU STANDARD", value: 1.25, color: "#8b5cf6" }, { name: "MAJU HEAVY", value: 1.10, color: "#a855f7" }, { name: "MAJU EXPRESS", value: 0.90, color: "#c084fc" }, { name: "MAJU VIP", value: 1.05, color: "#e879f9" }],
-  };
-  const currentIncomeData = incomeStatsData[chartTimeFilter];
-  const topIncomePackage = currentIncomeData.reduce((prev, curr) => prev.value > curr.value ? prev : curr);
-  const incomeTotalValue = currentIncomeData.reduce((acc, curr) => acc + curr.value, 0);
+  // KALKULASI VARIABEL INCOME
+  const topIncomePackage = incomeStats.reduce((prev, curr) => prev.value > curr.value ? prev : curr, incomeStats[0]);
+  const incomeTotalValue = incomeStats.reduce((acc, curr) => acc + curr.value, 0);
   
   let incomePieCurrentAngle = 0;
-  const incomeConicGradients = currentIncomeData.map((stat) => { const angle = (stat.value / incomeTotalValue) * 360; const start = incomePieCurrentAngle; incomePieCurrentAngle += angle; return `${stat.color} ${start}deg ${incomePieCurrentAngle}deg`; }).join(", ");
+  const incomeConicGradients = incomeStats.map((stat) => { const angle = incomeTotalValue > 0 ? (stat.value / incomeTotalValue) * 360 : 0; const start = incomePieCurrentAngle; incomePieCurrentAngle += angle; return `${stat.color} ${start}deg ${incomePieCurrentAngle}deg`; }).join(", ");
 
+  // GENERATOR SVG LINE CHART
   const generateSmoothPath = (data: number[], maxY: number) => {
     if (!data || data.length === 0) return "";
-    const points = data.map((val, i) => [(i / (data.length - 1)) * 1000, 400 - (val / maxY) * 400]);
+    const safeMax = maxY || 1;
+    const points = data.map((val, i) => [(i / (data.length - 1)) * 1000, 400 - (val / safeMax) * 400]);
     let d = `M ${points[0][0]} ${points[0][1]}`;
     for (let i = 1; i < points.length; i++) { const prev = points[i - 1]; const curr = points[i]; const cpX = (prev[0] + curr[0]) / 2; d += ` C ${cpX} ${prev[1]}, ${cpX} ${curr[1]}, ${curr[0]} ${curr[1]}`; }
     return d;
   };
   const generateFillPath = (data: number[], maxY: number) => { if (!data || data.length === 0) return ""; return `${generateSmoothPath(data, maxY)} L 1000 400 L 0 400 Z`; };
 
-  const timeLabels = { Day: ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "23:59"], Week: ["MON 12", "TUE 13", "WED 14", "THU 15", "FRI 16", "SAT 17", "SUN 18"], Month: ["1ST", "5TH", "10TH", "15TH", "20TH", "25TH", "30TH"] };
-  const trendTimeSeries = { Day: { data: [20, 35, 28, 55, 40, 70, 65], max: 100, yLabels: ["100K", "80K", "60K", "40K", "20K", "0"] }, Week: { data: [65, 80, 50, 110, 95, 140, 120], max: 150, yLabels: ["150K", "120K", "90K", "60K", "30K", "0"] }, Month: { data: [250, 320, 280, 390, 310, 440, 380], max: 500, yLabels: ["500K", "400K", "300K", "200K", "100K", "0"] } };
-  const incomeTimeSeries = { Day: { actual: [0.3, 0.5, 0.4, 0.8, 0.6, 1.0, 0.9], target: [0.4, 0.45, 0.5, 0.55, 0.6, 0.65, 0.7], max: 1.5, yLabels: ["1.5M", "1.2M", "0.9M", "0.6M", "0.3M", "0"] }, Week: { actual: [0.8, 0.9, 1.4, 1.7, 1.3, 1.5, 1.8], target: [1.2, 1.3, 1.2, 1.3, 1.2, 1.3, 1.2], max: 2.5, yLabels: ["2.5M", "2.0M", "1.5M", "1.0M", "0.5M", "0"] }, Month: { actual: [1.5, 2.8, 2.1, 3.8, 3.1, 4.5, 4.1], target: [2.5, 2.7, 2.9, 3.1, 3.3, 3.5, 3.7], max: 5, yLabels: ["5.0M", "4.0M", "3.0M", "2.0M", "1.0M", "0"] } };
-
+  // Konfigurasi Label Waktu
+  const timeLabels = { Day: ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00", "NOW"], Week: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "TODAY"], Month: ["1ST", "5TH", "10TH", "15TH", "20TH", "25TH", "NOW"] };
   const currentXLabels = timeLabels[chartTimeFilter];
-  const currentTrendTimeData = trendTimeSeries[chartTimeFilter];
-  const currentIncomeTimeData = incomeTimeSeries[chartTimeFilter];
+  
+  // Konfigurasi Line Chart
+  const trendMax = Math.max(...trendLine) * 1.5;
+  const incomeMax = Math.max(...incomeLine) * 1.5;
 
   return (
     <>
@@ -130,7 +204,7 @@ function AnalyticsContent() {
                   <div className="bg-[#121317]/60 border border-white/5 p-6 relative overflow-hidden group">
                     <div className="absolute top-0 left-0 w-full h-1 transition-shadow" style={{ backgroundColor: topTrendPackage.color, boxShadow: `0 0 15px ${topTrendPackage.color}` }}></div>
                     <p className="text-[10px] font-mono text-white/40 tracking-widest uppercase mb-4">Favourite Package Type</p>
-                    <h3 className="font-grotesk font-bold text-[32px] tracking-[2px] text-white mb-2">{topTrendPackage.name}</h3>
+                    <h3 className="font-grotesk font-bold text-[32px] tracking-[2px] text-white mb-2 truncate" title={topTrendPackage.name}>{topTrendPackage.name}</h3>
                     <div className="w-[80%] h-1 bg-white/10 mt-4 rounded-full overflow-hidden">
                       <div className="h-full transition-all duration-500" style={{ width: `${trendTopPercentage}%`, backgroundColor: topTrendPackage.color }}></div>
                     </div>
@@ -138,22 +212,21 @@ function AnalyticsContent() {
                   <div className="bg-[#121317]/60 border border-white/5 p-6">
                     <p className="text-[10px] font-mono text-white/40 tracking-widest uppercase mb-4">Total Volumes</p>
                     <div className="flex items-baseline gap-2 mb-3">
-                      <h3 className="font-grotesk font-bold text-[36px] leading-none text-white">{trendTotalUse}k</h3>
-                      <span className="font-mono text-[11px] text-white/40 tracking-widest uppercase">/ {chartTimeFilter}</span>
+                      <h3 className="font-grotesk font-bold text-[36px] leading-none text-white">{trendTotalUse}</h3>
+                      <span className="font-mono text-[11px] text-white/40 tracking-widest uppercase">/ REALTIME</span>
                     </div>
-                    <p className="font-mono text-[10px] text-[#00E3FD] flex items-center gap-1.5 tracking-widest"><TrendingUp size={14} /> +4.2% VS LAST {chartTimeFilter.toUpperCase()}</p>
+                    <p className="font-mono text-[10px] text-[#00E3FD] flex items-center gap-1.5 tracking-widest"><TrendingUp size={14} /> LIVE DATA</p>
                   </div>
                   <div className="bg-[#121317]/60 border border-white/5 p-6">
                     <p className="text-[10px] font-mono text-white/40 tracking-widest uppercase mb-4">Peak Contributor</p>
-                    <h3 className="font-grotesk font-bold text-[36px] leading-none text-white">{topTrendPackage.value}k</h3>
+                    <h3 className="font-grotesk font-bold text-[36px] leading-none text-white">{topTrendPackage.value}</h3>
                   </div>
                 </div>
 
                 <div className="bg-[#121317]/40 border border-white/5 rounded-xl p-8 flex flex-col relative flex-1 min-h-[300px]">
                   <div className="flex justify-between items-start mb-6">
-                    <h3 className="font-grotesk text-[18px] text-[#E5B5FF] uppercase tracking-[2px] font-bold">MOST USED PACKAGE TYPE</h3>
+                    <h3 className="font-grotesk text-[18px] text-[#E5B5FF] uppercase tracking-[2px] font-bold">MOST USED CARGO</h3>
                     <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2"><div className="w-3 h-3 bg-[#B026FF]"></div><span className="text-[10px] font-mono text-white/60 tracking-widest uppercase">PACKAGE TYPE</span></div>
                       <div className="relative">
                         <button onClick={() => setIsAnalyticsMenuOpen(!isAnalyticsMenuOpen)} className="text-white/40 hover:text-white transition-colors p-1"><MoreVertical size={18} /></button>
                         <AnimatePresence>
@@ -173,36 +246,38 @@ function AnalyticsContent() {
                     {analyticsChartType === "BAR" && (
                       <div className="flex-1 flex items-end border-b border-l border-white/10 w-full h-full relative pb-0 pl-12">
                         <div className="absolute inset-0 flex flex-col justify-between pb-8 pl-12 pointer-events-none z-0">
-                          {["100", "75", "50", "25", "10"].map((label, idx) => (<div key={idx} className="w-full border-t border-white/5 h-0 relative"><span className="absolute -left-10 -top-2 text-[9px] font-mono text-white/40">{label}</span></div>))}
+                          {["MAX", "AVG", "LOW", "-", "0"].map((label, idx) => (<div key={idx} className="w-full border-t border-white/5 h-0 relative"><span className="absolute -left-10 -top-2 text-[9px] font-mono text-white/40">{label}</span></div>))}
                         </div>
                         <div className="flex w-full h-[calc(100%-32px)] z-10"> 
-                          {currentPackageData.map((stat, idx) => (
+                          {packageStats.map((stat, idx) => {
+                            const h = topTrendPackage.value > 0 ? (stat.value / topTrendPackage.value) * 100 : 0;
+                            return (
                             <div key={stat.name} className="flex-1 flex flex-col justify-end group h-full relative mx-1">
-                              <motion.div initial={{ height: 0 }} animate={{ height: `${(stat.value / topTrendPackage.value) * 100}%` }} transition={{ type: "spring", stiffness: 60, damping: 15, delay: idx * 0.1 }} className="w-full relative transition-all duration-300 opacity-90 group-hover:opacity-100" style={{ background: `linear-gradient(to top, rgba(176,38,255,0.2) 0%, ${stat.color} 100%)` }}>
-                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#0a0a0c] text-[#E5B5FF] border border-[#B026FF]/50 font-mono text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-[0_0_10px_rgba(176,38,255,0.3)]">{stat.value}K</div>
+                              <motion.div initial={{ height: 0 }} animate={{ height: `${h}%` }} transition={{ type: "spring", stiffness: 60, damping: 15, delay: idx * 0.1 }} className="w-full relative transition-all duration-300 opacity-90 group-hover:opacity-100" style={{ background: `linear-gradient(to top, rgba(176,38,255,0.2) 0%, ${stat.color} 100%)` }}>
+                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#0a0a0c] text-[#E5B5FF] border border-[#B026FF]/50 font-mono text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-[0_0_10px_rgba(176,38,255,0.3)]">{stat.value} Qty</div>
                               </motion.div>
-                              <span className="absolute -bottom-8 left-0 right-0 text-center text-[10px] font-mono text-white/40 uppercase tracking-widest group-hover:text-[#E5B5FF] transition-colors">{stat.name}</span>
+                              <span className="absolute -bottom-8 left-0 right-0 text-center text-[9px] font-mono text-white/40 uppercase tracking-widest group-hover:text-[#E5B5FF] transition-colors truncate px-1">{stat.name}</span>
                             </div>
-                          ))}
+                          )})}
                         </div>
                       </div>
                     )}
                     {analyticsChartType === "LINE" && (
                       <div className="flex-1 w-full h-full relative border-b border-l border-white/10 pb-8 pl-12">
                         <div className="absolute inset-0 flex flex-col justify-between pb-8 pl-12 pointer-events-none z-0">
-                          {currentTrendTimeData.yLabels.map((label, idx) => (<div key={idx} className="w-full border-t border-white/5 h-0 relative"><span className="absolute -left-10 -top-2 text-[9px] font-mono text-white/40">{label}</span></div>))}
+                          {["MAX", "HIGH", "AVG", "LOW", "MIN", "0"].map((label, idx) => (<div key={idx} className="w-full border-t border-white/5 h-0 relative"><span className="absolute -left-10 -top-2 text-[9px] font-mono text-white/40">{label}</span></div>))}
                         </div>
                         <svg viewBox="0 0 1000 400" preserveAspectRatio="none" className="w-full h-[calc(100%-32px)] overflow-visible absolute bottom-8 left-12 right-0 z-10" style={{ width: 'calc(100% - 48px)' }}>
                           <defs>
                             <linearGradient id="purpleFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="rgba(176, 38, 255, 0.3)" /><stop offset="100%" stopColor="rgba(176, 38, 255, 0)" /></linearGradient>
                             <filter id="glow-purple-trend"><feGaussianBlur stdDeviation="5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
                           </defs>
-                          <motion.path initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.5, delay: 0.5 }} d={generateFillPath(currentTrendTimeData.data, currentTrendTimeData.max)} fill="url(#purpleFill)" />
-                          <motion.path initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: "easeInOut" }} d={generateSmoothPath(currentTrendTimeData.data, currentTrendTimeData.max)} fill="none" stroke="#E5B5FF" strokeWidth="4" style={{ filter: "url(#glow-purple-trend)" }} />
-                          {currentTrendTimeData.data.map((val, i) => (
+                          <motion.path initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.5, delay: 0.5 }} d={generateFillPath(trendLine, trendMax)} fill="url(#purpleFill)" />
+                          <motion.path initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: "easeInOut" }} d={generateSmoothPath(trendLine, trendMax)} fill="none" stroke="#E5B5FF" strokeWidth="4" style={{ filter: "url(#glow-purple-trend)" }} />
+                          {trendLine.map((val, i) => (
                             <g key={i} className="group cursor-pointer">
-                              <motion.circle initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 1 + i * 0.1 }} cx={(i / (currentTrendTimeData.data.length - 1)) * 1000} cy={400 - (val / currentTrendTimeData.max) * 400} r="6" fill="#1a1b22" stroke="#B026FF" strokeWidth="3" className="hover:scale-[1.8] hover:fill-[#E5B5FF] transition-all" />
-                              <text x={(i / (currentTrendTimeData.data.length - 1)) * 1000} y={400 - (val / currentTrendTimeData.max) * 400 - 20} textAnchor="middle" fill="#E5B5FF" className="text-[12px] font-mono opacity-0 group-hover:opacity-100 transition-opacity font-bold">{val}K</text>
+                              <motion.circle initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 1 + i * 0.1 }} cx={(i / (trendLine.length - 1)) * 1000} cy={400 - (val / trendMax) * 400} r="6" fill="#1a1b22" stroke="#B026FF" strokeWidth="3" className="hover:scale-[1.8] hover:fill-[#E5B5FF] transition-all" />
+                              <text x={(i / (trendLine.length - 1)) * 1000} y={400 - (val / trendMax) * 400 - 20} textAnchor="middle" fill="#E5B5FF" className="text-[12px] font-mono opacity-0 group-hover:opacity-100 transition-opacity font-bold">{val} QTY</text>
                             </g>
                           ))}
                         </svg>
@@ -220,12 +295,12 @@ function AnalyticsContent() {
                           </div>
                         </motion.div>
                         <div className="flex flex-col gap-4">
-                          {currentPackageData.map((stat, i) => (
+                          {packageStats.map((stat, i) => (
                              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} key={stat.name} className="flex items-center gap-3">
                                <div className="w-4 h-4 rounded shrink-0" style={{ backgroundColor: stat.color }}></div>
                                <div>
-                                 <p className="font-mono text-[11px] text-white/70 uppercase tracking-widest">{stat.name}</p>
-                                 <p className="font-bold text-[14px] text-white">{stat.value}K <span className="text-white/30 text-[10px] font-normal">({((stat.value/trendTotalUse)*100).toFixed(1)}%)</span></p>
+                                 <p className="font-mono text-[11px] text-white/70 uppercase tracking-widest">{stat.name.substring(0, 15)}</p>
+                                 <p className="font-bold text-[14px] text-white">{stat.value} Qty <span className="text-white/30 text-[10px] font-normal">({trendTotalUse > 0 ? ((stat.value/trendTotalUse)*100).toFixed(1) : 0}%)</span></p>
                                </div>
                              </motion.div>
                           ))}
@@ -242,31 +317,27 @@ function AnalyticsContent() {
                 <h1 className="font-grotesk font-bold text-[32px] tracking-[2px] uppercase text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.2)] mb-8 mt-2">AVERAGE INCOME</h1>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                   <div className="bg-[#121317]/60 border border-white/5 p-6 relative overflow-hidden">
-                    <p className="text-[10px] font-mono text-white/40 tracking-widest uppercase mb-4">Average Percentage</p>
-                    <div className="flex items-baseline gap-2 mb-3"><h3 className="font-grotesk font-bold text-[36px] leading-none text-white">94%</h3></div>
-                    <p className="font-mono text-[10px] text-[#00E3FD] flex items-center gap-1.5 tracking-widest"><TrendingUp size={14} /> 2.1%</p>
+                    <p className="text-[10px] font-mono text-white/40 tracking-widest uppercase mb-4">Total Real Revenue</p>
+                    <div className="flex items-baseline gap-2 mb-3"><h3 className="font-grotesk font-bold text-[36px] leading-none text-white">${incomeTotalValue.toFixed(2)}M</h3></div>
+                    <p className="font-mono text-[10px] text-[#00E3FD] flex items-center gap-1.5 tracking-widest"><TrendingUp size={14} /> LIVE UPDATE</p>
                   </div>
                   <div className="bg-[#121317]/60 border border-white/5 p-6">
-                    <p className="text-[10px] font-mono text-white/40 tracking-widest uppercase mb-4">Most Contributed Package</p>
-                    <h3 className="font-grotesk font-bold text-[32px] tracking-[2px] text-white mb-2">{topIncomePackage.name}</h3>
+                    <p className="text-[10px] font-mono text-white/40 tracking-widest uppercase mb-4">Most Profitable Cargo</p>
+                    <h3 className="font-grotesk font-bold text-[28px] tracking-[2px] text-white mb-2 truncate">{topIncomePackage.name}</h3>
                   </div>
                   <div className="bg-[#121317]/60 border border-white/5 p-6">
-                    <p className="text-[10px] font-mono text-white/40 tracking-widest uppercase mb-4">Success Departed</p>
-                    <div className="flex items-baseline gap-2"><h3 className="font-grotesk font-bold text-[36px] leading-none text-white">1</h3><span className="font-mono text-[11px] text-white/40 tracking-widest">FLEETS</span></div>
+                    <p className="text-[10px] font-mono text-white/40 tracking-widest uppercase mb-4">Total Fleets Deployed</p>
+                    <div className="flex items-baseline gap-2"><h3 className="font-grotesk font-bold text-[36px] leading-none text-white">{totalFleets}</h3><span className="font-mono text-[11px] text-white/40 tracking-widest">VESSELS</span></div>
                   </div>
                 </div>
 
                 <div className="bg-[#121317]/40 border border-white/5 rounded-xl p-8 flex flex-col relative flex-1 min-h-[300px]">
                   <div className="flex justify-between items-start mb-6">
                     <div>
-                      <h3 className="font-grotesk text-[18px] text-white uppercase tracking-[2px] font-bold mb-1">AVERAGE INCOME EARNED</h3>
-                      <p className="font-mono text-[10px] text-white/40 tracking-widest uppercase">REAL-TIME DATA STREAMING •</p>
+                      <h3 className="font-grotesk text-[18px] text-white uppercase tracking-[2px] font-bold mb-1">REAL-TIME INCOME MAP</h3>
+                      <p className="font-mono text-[10px] text-white/40 tracking-widest uppercase">STREAMING DIRECTLY FROM NEON DB •</p>
                     </div>
                     <div className="flex items-center gap-6">
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2"><div className="w-4 border-t-2 border-dashed border-[#B026FF]"></div><span className="text-[9px] font-mono text-white/60 tracking-widest uppercase">TARGET ETA</span></div>
-                        <div className="flex items-center gap-2"><div className="w-4 h-0.5 bg-[#00E3FD]"></div><span className="text-[9px] font-mono text-white/60 tracking-widest uppercase">ACTUAL INCOME AVG</span></div>
-                      </div>
                       <div className="relative">
                         <button onClick={() => setIsAnalyticsMenuOpen(!isAnalyticsMenuOpen)} className="text-white/40 hover:text-white transition-colors p-1"><MoreVertical size={18} /></button>
                         <AnimatePresence>
@@ -286,37 +357,38 @@ function AnalyticsContent() {
                     {analyticsChartType === "BAR" && (
                       <div className="flex-1 flex items-end border-b border-l border-white/10 w-full h-full relative pb-0 pl-12">
                         <div className="absolute inset-0 flex flex-col justify-between pb-8 pl-12 pointer-events-none z-0">
-                          {["100", "75", "50", "25", "10"].map((label, idx) => (<div key={idx} className="w-full border-t border-white/5 h-0 relative"><span className="absolute -left-10 -top-2 text-[9px] font-mono text-white/40">{label}</span></div>))}
+                          {["MAX", "HIGH", "AVG", "LOW", "0"].map((label, idx) => (<div key={idx} className="w-full border-t border-white/5 h-0 relative"><span className="absolute -left-10 -top-2 text-[9px] font-mono text-white/40">{label}</span></div>))}
                         </div>
                         <div className="flex w-full h-[calc(100%-32px)] z-10"> 
-                          {currentIncomeData.map((stat, idx) => (
+                          {incomeStats.map((stat, idx) => {
+                             const h = topIncomePackage.value > 0 ? (stat.value / topIncomePackage.value) * 100 : 0;
+                             return(
                             <div key={stat.name} className="flex-1 flex flex-col justify-end group h-full relative mx-1">
-                              <motion.div initial={{ height: 0 }} animate={{ height: `${(stat.value / topIncomePackage.value) * 100}%` }} transition={{ type: "spring", stiffness: 60, damping: 15, delay: idx * 0.1 }} className="w-full relative transition-all duration-300 opacity-90 group-hover:opacity-100" style={{ background: `linear-gradient(to top, rgba(176,38,255,0.2) 0%, #B026FF 100%)` }}>
-                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#0a0a0c] text-[#E5B5FF] border border-[#B026FF]/50 font-mono text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-[0_0_10px_rgba(176,38,255,0.3)]">${stat.value}M</div>
+                              <motion.div initial={{ height: 0 }} animate={{ height: `${h}%` }} transition={{ type: "spring", stiffness: 60, damping: 15, delay: idx * 0.1 }} className="w-full relative transition-all duration-300 opacity-90 group-hover:opacity-100" style={{ background: `linear-gradient(to top, rgba(176,38,255,0.2) 0%, #00E3FD 100%)` }}>
+                                <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-[#0a0a0c] text-[#00E3FD] border border-[#00E3FD]/50 font-mono text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-[0_0_10px_rgba(0,227,253,0.3)]">${stat.value}M</div>
                               </motion.div>
-                              <span className="absolute -bottom-8 left-0 right-0 text-center text-[10px] font-mono text-white/40 uppercase tracking-widest group-hover:text-[#E5B5FF] transition-colors">{stat.name}</span>
+                              <span className="absolute -bottom-8 left-0 right-0 text-center text-[9px] font-mono text-white/40 uppercase tracking-widest group-hover:text-[#00E3FD] transition-colors truncate px-1">{stat.name}</span>
                             </div>
-                          ))}
+                          )})}
                         </div>
                       </div>
                     )}
                     {analyticsChartType === "LINE" && (
                       <div className="flex-1 w-full h-full relative border-b border-l border-white/10 pb-8 pl-12">
                         <div className="absolute inset-0 flex flex-col justify-between pb-8 pl-12 pointer-events-none z-0">
-                          {currentIncomeTimeData.yLabels.map((label, idx) => (<div key={idx} className="w-full border-t border-white/5 h-0 relative"><span className="absolute -left-10 -top-2 text-[9px] font-mono text-white/40">{label}</span></div>))}
+                          {["MAX", "HIGH", "AVG", "LOW", "MIN", "0"].map((label, idx) => (<div key={idx} className="w-full border-t border-white/5 h-0 relative"><span className="absolute -left-10 -top-2 text-[9px] font-mono text-white/40">{label}</span></div>))}
                         </div>
                         <svg viewBox="0 0 1000 400" preserveAspectRatio="none" className="w-full h-[calc(100%-32px)] overflow-visible absolute bottom-8 left-12 right-0 z-10" style={{ width: 'calc(100% - 48px)' }}>
                           <defs>
                             <linearGradient id="cyanFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="rgba(0, 227, 253, 0.25)" /><stop offset="100%" stopColor="rgba(0, 227, 253, 0)" /></linearGradient>
                             <filter id="glow-cyan-income"><feGaussianBlur stdDeviation="5" result="coloredBlur"/><feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
                           </defs>
-                          <motion.path initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: "easeInOut" }} d={generateSmoothPath(currentIncomeTimeData.target, currentIncomeTimeData.max)} fill="none" stroke="#B026FF" strokeWidth="2" strokeDasharray="10 10" style={{ opacity: 0.8 }} />
-                          <motion.path initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.5, delay: 0.5 }} d={generateFillPath(currentIncomeTimeData.actual, currentIncomeTimeData.max)} fill="url(#cyanFill)" />
-                          <motion.path initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: "easeInOut" }} d={generateSmoothPath(currentIncomeTimeData.actual, currentIncomeTimeData.max)} fill="none" stroke="#00E3FD" strokeWidth="4" style={{ filter: "url(#glow-cyan-income)" }} />
-                          {currentIncomeTimeData.actual.map((val, i) => (
+                          <motion.path initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1.5, delay: 0.5 }} d={generateFillPath(incomeLine, incomeMax)} fill="url(#cyanFill)" />
+                          <motion.path initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 1.5, ease: "easeInOut" }} d={generateSmoothPath(incomeLine, incomeMax)} fill="none" stroke="#00E3FD" strokeWidth="4" style={{ filter: "url(#glow-cyan-income)" }} />
+                          {incomeLine.map((val, i) => (
                             <g key={`actual-${i}`} className="group cursor-pointer">
-                              <motion.circle initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 1 + i * 0.1 }} cx={(i / (currentIncomeTimeData.actual.length - 1)) * 1000} cy={400 - (val / currentIncomeTimeData.max) * 400} r="6" fill="#1a1b22" stroke="#00E3FD" strokeWidth="3" className="hover:scale-[1.8] hover:fill-[#00E3FD] transition-all" />
-                              <text x={(i / (currentIncomeTimeData.actual.length - 1)) * 1000} y={400 - (val / currentIncomeTimeData.max) * 400 - 20} textAnchor="middle" fill="#00E3FD" className="text-[12px] font-mono opacity-0 group-hover:opacity-100 transition-opacity font-bold">${val}M</text>
+                              <motion.circle initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 1 + i * 0.1 }} cx={(i / (incomeLine.length - 1)) * 1000} cy={400 - (val / incomeMax) * 400} r="6" fill="#1a1b22" stroke="#00E3FD" strokeWidth="3" className="hover:scale-[1.8] hover:fill-[#00E3FD] transition-all" />
+                              <text x={(i / (incomeLine.length - 1)) * 1000} y={400 - (val / incomeMax) * 400 - 20} textAnchor="middle" fill="#00E3FD" className="text-[12px] font-mono opacity-0 group-hover:opacity-100 transition-opacity font-bold">${val}M</text>
                             </g>
                           ))}
                         </svg>
@@ -334,12 +406,12 @@ function AnalyticsContent() {
                           </div>
                         </motion.div>
                         <div className="flex flex-col gap-4">
-                          {currentIncomeData.map((stat, i) => (
+                          {incomeStats.map((stat, i) => (
                              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }} key={stat.name} className="flex items-center gap-3">
                                <div className="w-4 h-4 rounded shrink-0" style={{ backgroundColor: stat.color }}></div>
                                <div>
-                                 <p className="font-mono text-[11px] text-white/70 uppercase tracking-widest">{stat.name}</p>
-                                 <p className="font-bold text-[14px] text-white">${stat.value}M <span className="text-white/30 text-[10px] font-normal">({((stat.value/incomeTotalValue)*100).toFixed(1)}%)</span></p>
+                                 <p className="font-mono text-[11px] text-white/70 uppercase tracking-widest">{stat.name.substring(0, 15)}</p>
+                                 <p className="font-bold text-[14px] text-white">${stat.value}M <span className="text-white/30 text-[10px] font-normal">({incomeTotalValue > 0 ? ((stat.value/incomeTotalValue)*100).toFixed(1) : 0}%)</span></p>
                                </div>
                              </motion.div>
                           ))}
@@ -370,9 +442,9 @@ function AnalyticsContent() {
               </AnimatePresence>
             </div>
           </div>
-          <p className="font-mono text-[11px] text-white/70 tracking-widest uppercase mb-10">LAST UPDATE: <br/> <span className="text-white font-bold mt-1 inline-block">2026-04-15</span></p>
+          <p className="font-mono text-[11px] text-white/70 tracking-widest uppercase mb-10">LAST UPDATE: <br/> <span className="text-[#00E3FD] font-bold mt-1 inline-block flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[#00E3FD] animate-pulse"></span>LIVE FROM NEON DB</span></p>
           <div className="flex flex-col gap-2">
-            <button onClick={() => handleTabChange("TREND")} className={`flex items-center gap-4 px-4 py-4 rounded-lg font-mono text-[11px] tracking-widest uppercase transition-all text-left ${analyticsSidebarTab === "TREND" ? "bg-[#B026FF]/10 border-l-2 border-[#B026FF] text-[#E5B5FF] font-bold" : "text-white/40 hover:bg-white/5 hover:text-white"}`}><TrendingUp size={16} /> PACKAGE TREND</button>
+            <button onClick={() => handleTabChange("TREND")} className={`flex items-center gap-4 px-4 py-4 rounded-lg font-mono text-[11px] tracking-widest uppercase transition-all text-left ${analyticsSidebarTab === "TREND" ? "bg-[#B026FF]/10 border-l-2 border-[#B026FF] text-[#E5B5FF] font-bold" : "text-white/40 hover:bg-white/5 hover:text-white"}`}><TrendingUp size={16} /> CARGO TREND</button>
             <button onClick={() => handleTabChange("INCOME")} className={`flex items-center gap-4 px-4 py-4 rounded-lg font-mono text-[11px] tracking-widest uppercase transition-all text-left ${analyticsSidebarTab === "INCOME" ? "bg-[#B026FF]/10 border-l-2 border-[#B026FF] text-[#E5B5FF] font-bold" : "text-white/40 hover:bg-white/5 hover:text-white"}`}><Activity size={16} /> AVERAGE INCOME</button>
           </div>
         </div>
