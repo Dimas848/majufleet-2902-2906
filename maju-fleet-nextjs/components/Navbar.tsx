@@ -103,9 +103,9 @@ export default function Navbar() {
     try {
       const res = await loginCustomer(loginEmail, loginPassword);
       if (res && res.success) {
+        setLoading(false); // 🔥 FIX: Matikan loading saat berhasil masuk
         setActiveModal("none");
         resetFormStates();
-        // 🔄 RUTE UTAMA JALUR SUKSES DIUBAH KE /dashboard/bookship
         router.push("/dashboard/bookship");
       } else {
         setErrorMsg(res?.message || "INVALID USERNAME OR PASSWORD.");
@@ -146,7 +146,6 @@ export default function Navbar() {
 
       if (res && res.success) {
         setLoading(false);
-        // 🔄 TAMPILKAN NOTIFIKASI SUKSES & LEMPAR KE FORM LOGIN CUSTOMER
         alert(`Your username "${regEmail}" has been registered successfully! Please sign in using your credentials.`);
         switchModal("login"); 
       } else {
@@ -170,6 +169,7 @@ export default function Navbar() {
     try {
       const res = await loginAdmin(adminId, adminKey);
       if (res && res.success) {
+        setLoading(false); // 🔥 FIX: Matikan loading admin saat berhasil masuk
         setActiveModal("none");
         resetFormStates();
         router.push("/Dashboard-Admin/fleet");
@@ -185,6 +185,7 @@ export default function Navbar() {
 
   const resetFormStates = () => {
     setErrorMsg("");
+    setLoading(false); // 🔥 FIX: Selalu reset state loading tiap kali modal ditutup/dibuka
     setLoginEmail("");
     setLoginPassword("");
     setRegName("");
