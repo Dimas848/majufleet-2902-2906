@@ -93,7 +93,7 @@ export default function Navbar() {
   else if (strength === 100) strengthColor = "bg-green-500";
 
   // ==========================================
-  // 1. HANDLER LOGIN CUSTOMER
+  // 1. HANDLER LOGIN CUSTOMER (WITH ENGLISH TRANSLATION)
   // ==========================================
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,12 +103,19 @@ export default function Navbar() {
     try {
       const res = await loginCustomer(loginEmail, loginPassword);
       if (res && res.success) {
-        setLoading(false); // 🔥 FIX: Matikan loading saat berhasil masuk
+        setLoading(false);
         setActiveModal("none");
         resetFormStates();
         router.push("/dashboard/bookship");
       } else {
-        setErrorMsg(res?.message || "INVALID USERNAME OR PASSWORD.");
+        // 🔄 MENGUBAH RESPON BAHASA INDONESIA KE BAHASA INGGRIS UNTUK DOSEN
+        let rawMessage = res?.message || "INVALID USERNAME OR PASSWORD.";
+        if (rawMessage.includes("tidak ditemukan") || rawMessage.includes("bukan akun Customer")) {
+          rawMessage = "EMAIL NOT FOUND OR INVALID CUSTOMER ACCOUNT ROLE.";
+        } else if (rawMessage.includes("salah") || rawMessage.includes("Password yang Anda masukkan salah")) {
+          rawMessage = "INCORRECT PASSWORD. PLEASE TRY AGAIN.";
+        }
+        setErrorMsg(rawMessage.toUpperCase());
         setLoading(false);
       }
     } catch (err) {
@@ -118,7 +125,7 @@ export default function Navbar() {
   };
 
   // ==========================================
-  // 2. HANDLER REGISTER CUSTOMER (TIDAK LANGSUNG MASUK)
+  // 2. HANDLER REGISTER CUSTOMER
   // ==========================================
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,7 +176,7 @@ export default function Navbar() {
     try {
       const res = await loginAdmin(adminId, adminKey);
       if (res && res.success) {
-        setLoading(false); // 🔥 FIX: Matikan loading admin saat berhasil masuk
+        setLoading(false);
         setActiveModal("none");
         resetFormStates();
         router.push("/Dashboard-Admin/fleet");
@@ -185,7 +192,7 @@ export default function Navbar() {
 
   const resetFormStates = () => {
     setErrorMsg("");
-    setLoading(false); // 🔥 FIX: Selalu reset state loading tiap kali modal ditutup/dibuka
+    setLoading(false);
     setLoginEmail("");
     setLoginPassword("");
     setRegName("");
@@ -315,9 +322,9 @@ export default function Navbar() {
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><User size={16} /></div>
                       <input type="email" required value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="Enter email" className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
                     </div>
-                    {/* REVISI CLICK-TO-FILL CUSTOMER EMAIL */}
+                    {/* STATIS TANPA kedap-kedip */}
                     {errorMsg && (
-                      <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide animate-pulse">
+                      <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide">
                         💡 Example: <button type="button" onClick={() => setLoginEmail("dimju@gmail.com")} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">dimju@gmail.com</button> (Click to fill)
                       </span>
                     )}
@@ -331,9 +338,9 @@ export default function Navbar() {
                         {showLoginPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
-                    {/* REVISI CLICK-TO-FILL CUSTOMER PASSWORD */}
+                    {/* STATIS TANPA kedap-kedip */}
                     {errorMsg && (
-                      <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide animate-pulse">
+                      <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide">
                         💡 Example: <button type="button" onClick={() => { setLoginPassword("maju123"); setShowLoginPassword(true); }} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">maju123</button> (Click to fill)
                       </span>
                     )}
@@ -434,7 +441,8 @@ export default function Navbar() {
                 <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-[#B026FF]/30 rounded-br-xl pointer-events-none" />
                 <div className="flex flex-col items-center mb-6 mt-2">
                   <ShieldAlert size={48} className="mb-4 text-[#B026FF] drop-shadow-[0_0_15px_rgba(176,38,255,0.4)]" />
-                  <h2 className="text-white font-grotesk font-bold text-xl tracking-[4px] uppercase text-center leading-tight">Id-Admin <br/> Clearance</h2>
+                  {/* REVISI JUDUL MODAL JADI LOGIN ADMINISTRATOR */}
+                  <h2 className="text-white font-grotesk font-bold text-xl tracking-[4px] uppercase text-center leading-tight">LOGIN ADMINISTRATOR</h2>
                 </div>
 
                 {errorMsg && (
@@ -450,9 +458,9 @@ export default function Navbar() {
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><User size={16} /></div>
                       <input type="text" required value={adminId} onChange={(e) => setAdminId(e.target.value)} placeholder="Authorized ID / Email..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
                     </div>
-                    {/* REVISI CLICK-TO-FILL ADMIN ID */}
+                    {/* STATIS TANPA kedap-kedip */}
                     {errorMsg && (
-                      <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide animate-pulse">
+                      <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide">
                         💡 Example: <button type="button" onClick={() => setAdminId("rina.commander@majufleet.com")} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">rina.commander@majufleet.com</button> (Click to fill)
                       </span>
                     )}
@@ -466,9 +474,9 @@ export default function Navbar() {
                         {showAdminPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
-                    {/* REVISI CLICK-TO-FILL ADMIN PASSWORD */}
+                    {/* STATIS TANPA kedap-kedip */}
                     {errorMsg && (
-                      <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide animate-pulse">
+                      <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide">
                         💡 Example: <button type="button" onClick={() => { setAdminKey("MAJUADMIN2026"); setShowAdminPassword(true); }} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">MAJUADMIN2026</button> (Click to fill)
                       </span>
                     )}

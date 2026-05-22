@@ -108,8 +108,28 @@ function AdminControlContent() {
     }
   };
 
+  // ==========================================
+  // REVISI LOGIKA VALIDASI EMAIL PADA SAVE
+  // ==========================================
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Proteksi Khusus Tab Fleet Registration
+    if (activeTab === "fleet") {
+      const senderEmail = formData.senderEmail ? String(formData.senderEmail).trim() : "";
+      const recipientEmail = formData.recipientEmail ? String(formData.recipientEmail).trim() : "";
+
+      if (!senderEmail.includes("@")) {
+        alert("VALIDATION ERROR: Sender Email Address must contain an '@' symbol!");
+        return;
+      }
+
+      if (!recipientEmail.includes("@")) {
+        alert("VALIDATION ERROR: Recipient Email Address must contain an '@' symbol!");
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     const result = await saveEntity(activeTab, formData, editingId);
