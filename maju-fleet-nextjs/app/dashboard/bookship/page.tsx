@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Package, MapPin, Weight, Ruler, Calendar, ShieldCheck, Box, Send } from "lucide-react";
 import UserNavbar from "@/components/usernavbar";
+// Import Server Actions pendukung sistem database
+import { bookShipmentCustomer, getCurrentSession } from "@/app/lib/actions";
 
 function BookShipmentSkeleton() {
   return (
@@ -76,15 +78,59 @@ export default function BookShipmentPage() {
   const handleBooking = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setLoading(false);
-    setSuccess(true);
-    
-    setTimeout(() => {
-      setSuccess(false);
-      (e.target as HTMLFormElement).reset();
-      router.push("/dashboard/billing");
-    }, 3000);
+
+    const currentFormElement = e.currentTarget;
+    const formData = new FormData(currentFormElement);
+
+    try {
+      const session = await getCurrentSession();
+      if (!session) {
+        alert("Sesi otentikasi habis. Silakan melakukan login kembali.");
+        router.push("/login");
+        return;
+      }
+      
+      const length = parseFloat(formData.get("length") as string) || 0;
+      const width = parseFloat(formData.get("width") as string) || 0;
+      const height = parseFloat(formData.get("height") as string) || 0;
+      const calculatedVolume = length * width * height;
+
+      // 💡 SOLUSI FIX: Deteksi berat dan unit pilihan user (KG / Tons)
+      const inputWeight = parseFloat(formData.get("weight") as string) || 0;
+      const weightUnit = formData.get("weightUnit") as string;
+      
+      // Jika user memilih 'tons', kalikan otomatis dengan 1000 agar menjadi satuan KG murni di database
+      const weightInKg = weightUnit === "tons" ? inputWeight * 1000 : inputWeight;
+
+      const payload = {
+        userId: session.id,
+        packageTypeString: formData.get("packageType") as string,
+        senderCity: formData.get("senderCity") as string,
+        recipientCity: formData.get("recipientCity") as string,
+        cargoDesc: formData.get("cargoDesc") as string,
+        category: formData.get("category") as string,
+        weight: weightInKg, // Mengirimkan berat yang sudah terkonversi standar KG
+        dimensions: calculatedVolume
+      };
+
+      const res = await bookShipmentCustomer(payload);
+      
+      if (res.success) {
+        setSuccess(true);
+        setTimeout(() => {
+          setSuccess(false);
+          currentFormElement.reset();
+          router.push("/dashboard/billing");
+        }, 2000);
+      } else {
+        alert("Gagal memproses data booking: " + res.message);
+      }
+    } catch (error) {
+      console.error("Critical error inside form component:", error);
+      alert("Terjadi kegagalan komunikasi sistem ke server.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const inputClass = "w-full bg-[#121317] border border-white/10 rounded px-10 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors";
@@ -125,7 +171,7 @@ export default function BookShipmentPage() {
                       <label className={labelClass}>Freight Service Plan</label>
                       <div className="relative">
                         <ShieldCheck size={16} className={iconClass} />
-                        <select required defaultValue="" className={`${inputClass} pl-10 appearance-none`}>
+                        <select name="packageType" required defaultValue="" className={`${inputClass} pl-10 appearance-none`}>
                           <option value="" disabled>Select service plan...</option>
                           <option value="economy">Maju Economy (Cost-Optimized)</option>
                           <option value="standard">Maju Standard (Standard Container)</option>
@@ -139,7 +185,7 @@ export default function BookShipmentPage() {
                       <label className={labelClass}>Preferred Shipping Date</label>
                       <div className="relative">
                         <Calendar size={16} className={iconClass} />
-                        <input type="date" required className={`${inputClass} pl-10`} />
+                        <input name="shippingDate" type="date" required className={`${inputClass} pl-10`} />
                       </div>
                     </div>
                   </div>
@@ -147,21 +193,21 @@ export default function BookShipmentPage() {
 
                 <div className="mb-10">
                   <h3 className="text-white flex items-center gap-2 font-grotesk text-[14px] uppercase tracking-[2px] mb-6 pb-2 border-b border-white/10">
-                    <MapPin size={16} className="text-[#B026FF]" /> 2. Shipping Route
+                    <MapPin size={16} className={iconClass} /> 2. Shipping Route
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className={labelClass}>Origin (Pickup Location/Port)</label>
                       <div className="relative">
                         <MapPin size={16} className={iconClass} />
-                        <input type="text" required placeholder="e.g. Jakarta, Indonesia" className={`${inputClass} pl-10`} />
+                        <input name="senderCity" type="text" required placeholder="e.g. Jakarta, Indonesia" className={`${inputClass} pl-10`} />
                       </div>
                     </div>
                     <div>
                       <label className={labelClass}>Destination (Drop-off Location/Port)</label>
                       <div className="relative">
                         <MapPin size={16} className={`${iconClass} text-[#BDF4FF]`} />
-                        <input type="text" required placeholder="e.g. Singapore Port" className={`${inputClass} pl-10`} />
+                        <input name="recipientCity" type="text" required placeholder="e.g. Singapore Port" className={`${inputClass} pl-10`} />
                       </div>
                     </div>
                   </div>
@@ -176,19 +222,21 @@ export default function BookShipmentPage() {
                       <label className={labelClass}>Cargo Description</label>
                       <div className="relative">
                         <Package size={16} className={iconClass} />
-                        <input type="text" required placeholder="What are you shipping?" className={`${inputClass} pl-10`} />
+                        <input name="cargoDesc" type="text" required placeholder="What are you shipping?" className={`${inputClass} pl-10`} />
                       </div>
                     </div>
                     <div>
                       <label className={labelClass}>Cargo Type</label>
-                      <select required defaultValue="" className={`${inputClass} px-4 appearance-none`}>
-                        <option value="" disabled>Select cargo category...</option>
-                        <option value="general">General Goods (Dry)</option>
-                        <option value="hazardous">Hazardous / Chemicals</option>
-                        <option value="perishable">Perishable (Needs Cold Storage)</option>
-                        <option value="fragile">Fragile / Electronics</option>
-                        <option value="oversized">Oversized Machinery</option>
-                      </select>
+                      <div className="relative">
+                        <select name="category" required defaultValue="" className={`${inputClass} px-4 appearance-none`}>
+                          <option value="" disabled>Select cargo category...</option>
+                          <option value="general">General Goods (Dry)</option>
+                          <option value="hazardous">Hazardous / Chemicals</option>
+                          <option value="perishable">Perishable (Needs Cold Storage)</option>
+                          <option value="fragile">Fragile / Electronics</option>
+                          <option value="oversized">Oversized Machinery</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
 
@@ -197,11 +245,11 @@ export default function BookShipmentPage() {
                       <label className={labelClass}>Total Weight</label>
                       <div className="relative">
                         <Weight size={16} className={iconClass} />
-                        <input type="number" min="0.1" step="0.1" required placeholder="0.0" className={`${inputClass} pl-10 pr-20`} />
+                        <input name="weight" type="number" min="0.1" step="0.1" required placeholder="0.0" className={`${inputClass} pl-10 pr-20`} />
                         <div className="absolute right-1 top-1 bottom-1 flex items-center">
-                          <select className="h-full bg-[#1a1b20] border-l border-white/10 rounded-r px-3 text-white/80 font-inter text-[11px] uppercase tracking-wider focus:outline-none cursor-pointer">
-                            <option value="tons">Tons</option>
+                          <select name="weightUnit" className="h-full bg-[#1a1b20] border-l border-white/10 rounded-r px-3 text-white/80 font-inter text-[11px] uppercase tracking-wider focus:outline-none cursor-pointer">
                             <option value="kg">KG</option>
+                            <option value="tons">Tons</option>
                           </select>
                         </div>
                       </div>
@@ -211,21 +259,21 @@ export default function BookShipmentPage() {
                         <label className={labelClass}>Length (m)</label>
                         <div className="relative">
                           <Ruler size={16} className={iconClass} />
-                          <input type="number" min="0.1" step="0.1" required placeholder="L" className={`${inputClass} pl-10`} />
+                          <input name="length" type="number" min="0.1" step="0.1" required placeholder="L" className={`${inputClass} pl-10`} />
                         </div>
                       </div>
                       <div>
                         <label className={labelClass}>Width (m)</label>
                         <div className="relative">
                           <Ruler size={16} className={iconClass} />
-                          <input type="number" min="0.1" step="0.1" required placeholder="W" className={`${inputClass} pl-10`} />
+                          <input name="width" type="number" min="0.1" step="0.1" required placeholder="W" className={`${inputClass} pl-10`} />
                         </div>
                       </div>
                       <div>
                         <label className={labelClass}>Height (m)</label>
                         <div className="relative">
                           <Ruler size={16} className={iconClass} />
-                          <input type="number" min="0.1" step="0.1" required placeholder="H" className={`${inputClass} pl-10`} />
+                          <input name="height" type="number" min="0.1" step="0.1" required placeholder="H" className={`${inputClass} pl-10`} />
                         </div>
                       </div>
                     </div>

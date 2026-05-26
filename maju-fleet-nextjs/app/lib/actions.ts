@@ -1,18 +1,18 @@
 "use server";
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 
-const prisma = new PrismaClient();
+// Inisialisasi Prisma Singleton Pattern agar koneksi database tidak habis saat hot-reload
+const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
+const prisma = globalForPrisma.prisma || new PrismaClient();
+if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 // ==============================================================================
 // 1. AUTHENTICATION & SESSION ACTIONS (LOGIN, REGISTER, COOKIES)
 // ==============================================================================
 
-/**
- * Pendaftaran akun Customer baru langsung ke database Neon
- */
 export async function registerCustomer(formData: any) {
   try {
     const existingUser = await prisma.user.findUnique({
@@ -30,7 +30,7 @@ export async function registerCustomer(formData: any) {
         password: formData.password || "maju123",
         phone: formData.phone || null,
         address: formData.address || null,
-        role: "customer", 
+        role: "customer",
         status: "Active"
       }
     });
@@ -42,9 +42,6 @@ export async function registerCustomer(formData: any) {
   }
 }
 
-/**
- * Login Customer dengan validasi Email dan Password
- */
 export async function loginCustomer(email: string, password?: string) {
   try {
     if (!email || !password) {
@@ -74,9 +71,6 @@ export async function loginCustomer(email: string, password?: string) {
   }
 }
 
-/**
- * Login Administrator / Commander Override dengan validasi tingkat tinggi
- */
 export async function loginAdmin(commanderId: string, masterKey: string) {
   if (!commanderId || !masterKey) {
     return { success: false, message: "ACCESS DENIED: CREDENTIALS CANNOT BE EMPTY." };
@@ -110,9 +104,6 @@ export async function loginAdmin(commanderId: string, masterKey: string) {
   }
 }
 
-/**
- * Mengambil informasi sesi cookie user aktif (untuk proteksi halaman dashboard)
- */
 export async function getCurrentSession() {
   const cookieStore = await cookies();
   const userId = cookieStore.get("session_user_id")?.value;
@@ -122,33 +113,23 @@ export async function getCurrentSession() {
   return { id: parseInt(userId), name: userName };
 }
 
-
 // ==============================================================================
 // 2. ADMIN CORE ACTIONS (CRUD MASTER DATA FOR CONTROL CENTER)
 // ==============================================================================
 
-/**
- * Mengambil seluruh data master gabungan untuk ditampilkan di Control Center Admin
- */
 export async function getAllData() {
   try {
     const shipments = await prisma.shipment.findMany({
       include: {
         vessel: true,
         user: true,
-        items: {
-          include: {
-            packageType: true 
-          }
-        }
+        items: { include: { packageType: true } }
       },
       orderBy: { id: "desc" }
     });
 
     const crews = await prisma.user.findMany({
-      where: {
-        NOT: { role: "customer" }
-      },
+      where: { NOT: { role: "customer" } },
       orderBy: { id: "desc" }
     });
 
@@ -168,14 +149,10 @@ export async function getAllData() {
   }
 }
 
-/**
- * Menyimpan data Baru (Create) atau memperbarui data lama (Update) di Control Center Admin
- */
 export async function saveEntity(entityType: string, data: any, editingId: number | null) {
   try {
     const isUpdating = editingId !== null;
 
-    // --- SINKRONISASI SHIPMENT / FLEET ---
     if (entityType === "fleet") {
       const shipmentData = {
         status: data.status || "PENDING",
@@ -192,7 +169,7 @@ export async function saveEntity(entityType: string, data: any, editingId: numbe
         recipientAddress: data.recipientAddress || null,
         recipientCountry: data.recipientCountry || null,
         recipientCity: data.recipientCity || "Rotterdam",
-        cargoDesc: data.cargoDesc || data.itemDescription || "General Cargo", 
+        cargoDesc: data.cargoDesc || data.itemDescription || "General Cargo",
         weight: parseFloat(data.weight || "0"),
         weightUnit: data.weightUnit || "KG",
         dimensions: parseFloat(data.dimensions || "0"),
@@ -205,40 +182,29 @@ export async function saveEntity(entityType: string, data: any, editingId: numbe
           data: shipmentData,
         });
       } else {
-        // Pemilihan Relasi ID secara Dinamis & Fallback Berdasarkan Log Record Database
-        const selectedUserId = data.userId ? parseInt(data.userId) : 1; 
-        const selectedVesselId = data.vesselId ? parseInt(data.vesselId) : 1; 
-        const selectedPackageTypeId = data.packageTypeId ? parseInt(data.packageTypeId) : 2; // Default 2 = MAJU STANDARD
+        const selectedUserId = data.userId ? parseInt(data.userId) : 1;
+        const selectedVesselId = data.vesselId ? parseInt(data.vesselId) : 1;
+        const selectedPackageTypeId = data.packageTypeId ? parseInt(data.packageTypeId) : 2;
 
-        // PERBAIKAN SINTAKS: Menggunakan operator relasi objek 'connect' bawaan Prisma Engine
         await prisma.shipment.create({
           data: {
             receipt_number: data.code || `MJF-${Math.floor(100000 + Math.random() * 900000)}`,
-            user: {
-              connect: { id: selectedUserId }
-            },
-            vessel: {
-              connect: { id: selectedVesselId }
-            },
+            user: { connect: { id: selectedUserId } },
+            vessel: { connect: { id: selectedVesselId } },
             ...shipmentData,
             items: {
               create: [
                 {
                   description: data.cargoDesc || data.itemDescription || "General Cargo",
                   weight_kg: parseFloat(data.weight || "0"),
-                  packageType: {
-                    connect: { id: selectedPackageTypeId }
-                  }
+                  packageType: { connect: { id: selectedPackageTypeId } }
                 }
               ]
             }
           },
         });
       }
-    } 
-    
-    // --- SINKRONISASI CREW DATA ---
-    else if (entityType === "crew") {
+    } else if (entityType === "crew") {
       const crewData = {
         name: data.name,
         email: data.email,
@@ -255,14 +221,9 @@ export async function saveEntity(entityType: string, data: any, editingId: numbe
           data: crewData,
         });
       } else {
-        await prisma.user.create({
-          data: crewData,
-        });
+        await prisma.user.create({ data: crewData });
       }
-    }
-
-    // --- SINKRONISASI VESSEL REGISTRY ---
-    else if (entityType === "vessel") {
+    } else if (entityType === "vessel") {
       const vesselData = {
         name: data.name,
         capacity: parseInt(data.capacity || "0"),
@@ -278,9 +239,7 @@ export async function saveEntity(entityType: string, data: any, editingId: numbe
           data: vesselData,
         });
       } else {
-        await prisma.vessel.create({
-          data: vesselData,
-        });
+        await prisma.vessel.create({ data: vesselData });
       }
     }
 
@@ -294,9 +253,6 @@ export async function saveEntity(entityType: string, data: any, editingId: numbe
   }
 }
 
-/**
- * Menghapus data permanen dari database cloud Neon berdasarkan entitasnya
- */
 export async function deleteEntity(entityType: string, id: number) {
   try {
     if (entityType === "fleet") {
@@ -317,44 +273,35 @@ export async function deleteEntity(entityType: string, id: number) {
   }
 }
 
-
 // ==============================================================================
 // 3. MAP ACTIONS (SINKRONISASI KOORDINAT REAL-TIME LEAFLET MAP)
 // ==============================================================================
 
-/**
- * Menarik data koordinat dari database Neon untuk dirender di Peta Pemantauan Digital
- */
 export async function getMapVessels() {
   try {
     const shipments = await prisma.shipment.findMany({
       include: {
         vessel: true,
-        items: {
-          include: { packageType: true }
-        },
-        details: {
-          orderBy: { update_time: 'desc' },
-          take: 1
-        }
+        items: { include: { packageType: true } },
+        details: { orderBy: { update_time: 'desc' }, take: 1 }
       }
     });
 
-    return shipments.map((s: any) => {
+  return shipments.map((s: any) => {
       const latestDetail = s.details?.[0];
       const lat = latestDetail?.current_lat ?? 0;
       const lng = latestDetail?.current_lng ?? 0;
 
-      let dotColor = "#00E3FD"; 
+      let dotColor = "#00E3FD";
       let reason = "";
 
       if (s.status === "DELIVERED") {
-        dotColor = "#34C759"; 
+        dotColor = "#34C759";
       } else if (s.status === "DELAYED") {
-        dotColor = "#FF3B30"; 
+        dotColor = "#FF3B30";
         reason = "Weather anomaly / Port congestion";
       } else if (s.status === "PENDING" || s.status === "NOT DEPARTED YET") {
-        dotColor = "#FFCC00"; 
+        dotColor = "#FFCC00";
         reason = "Awaiting customs clearance";
       }
 
@@ -378,66 +325,209 @@ export async function getMapVessels() {
   }
 }
 
-
 // ==============================================================================
-// 4. CUSTOMER DASHBOARD ACTIONS (FINANCIAL BILLING LOGS & HISTORY)
+// 4. CUSTOMER DASHBOARD ACTIONS (INTEGRATED BILLING, BOOKING, & TRACKING)
 // ==============================================================================
 
-/**
- * Menarik data logistik dan menghitung kalkulasi invoice keuangan otomatis per Customer
- */
+export async function bookShipmentCustomer(formData: {
+  userId: number;
+  packageTypeString: string;
+  senderCity: string;
+  recipientCity: string;
+  cargoDesc: string;
+  category: string;
+  weight: number;
+  dimensions: number;
+}) {
+  try {
+    const cleanUserId = Number(formData.userId);
+    const cleanWeight = Number(formData.weight) || 0;
+    const cleanDimensions = Number(formData.dimensions) || 0;
+
+    const activeUser = await prisma.user.findUnique({
+      where: { id: cleanUserId }
+    });
+
+    if (!activeUser) {
+      return { success: false, message: "Akses ditolak: User ID tidak ditemukan." };
+    }
+
+    const packageMapping: Record<string, number> = {
+      economy: 1,
+      standard: 2,
+      heavy: 3,
+      express: 4,
+      vip: 5
+    };
+    const packageTypeId = packageMapping[formData.packageTypeString] || 1;
+
+    // SINKRONISASI LIST HARGA PER KG SESUAI BROSUR
+    const pricingMapping: Record<string, number> = {
+      economy: 59000,
+      standard: 70000,
+      heavy: 120000, 
+      express: 90000,
+      vip: 150000    
+    };
+    
+    const basePricePerKg = pricingMapping[formData.packageTypeString] || 70000;
+    
+    // 💡 Kalkulasi Total Tagihan (Berat KG x Harga Brosur Paket)
+    const freightCharge = basePricePerKg * cleanWeight;
+    const insurance = Math.round(freightCharge * 0.05);
+    const fuelSurcharge = Math.round(freightCharge * 0.08);
+    const grandTotal = freightCharge + insurance + fuelSurcharge;
+
+    const originInput = formData.senderCity ? formData.senderCity.toLowerCase() : "";
+    const destInput = formData.recipientCity ? formData.recipientCity.toLowerCase() : "";
+
+    let originId = 1; 
+    let destId = 3;   
+
+    if (originInput.includes("jakarta") || originInput.includes("priok")) originId = 1;
+    if (originInput.includes("rotterdam")) originId = 2;
+    if (destInput.includes("singapo") || destInput.includes("singapu")) destId = 3;
+    if (destInput.includes("tokyo")) destId = 4;
+
+    const receiptNumber = `MJF-${Math.floor(100000 + Math.random() * 900000)}`;
+    const invoiceNumber = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // 🔥 CREATE BERSARANG (NESTED CREATE): Membuat Shipment, Items, dan Invoice sekaligus!
+    await prisma.shipment.create({
+      data: {
+        receipt_number: receiptNumber,
+        status: "PENDING",
+        userId: cleanUserId,
+        vesselId: 1, 
+        originId: originId, 
+        destId: destId,     
+        cargoDesc: formData.cargoDesc,
+        category: formData.category,
+        weight: cleanWeight,
+        weightUnit: "KG",
+        dimensions: cleanDimensions,
+        book_date: new Date(),
+        
+        senderName: activeUser.name,
+        senderEmail: activeUser.email,
+        senderContact: activeUser.phone || "08123456789",
+        senderCity: formData.senderCity,
+        senderAddress: activeUser.address || "Hub Logistik Utama",
+        senderCountry: "Indonesia",
+
+        recipientName: "PT Global Logistics Partner",
+        recipientContact: "021998877",
+        recipientEmail: "partner@majufleet.com",
+        recipientAddress: "Port Warehouse Zone Alpha",
+        recipientCity: formData.recipientCity,
+        recipientCountry: "Destination Country",
+        captain: "Awaiting Assignment",
+
+        items: {
+          create: [
+            {
+              description: formData.cargoDesc,
+              weight_kg: cleanWeight,
+              packageTypeId: packageTypeId,
+            }
+          ]
+        },
+        invoice: {
+          create: {
+            invoiceNumber: invoiceNumber,
+            amount: grandTotal,
+            status: "Pending"
+          }
+        }
+      }
+    });
+
+    revalidatePath("/dashboard/billing");
+    revalidatePath("/dashboard/myshipments");
+    return { success: true, message: "Booking kargo berhasil terdaftar!" };
+
+  } catch (error) {
+    console.error("❌ CRITICAL DATABASE CRASH REPORT:", error);
+    return { success: false, message: "Terjadi kesalahan internal pada transaksi database." };
+  }
+}
+
+export async function confirmInvoicePayment(invoiceId: number, shipmentId: number) {
+  try {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // 1. Ubah status Invoice jadi Paid
+      await tx.invoice.update({
+        where: { id: Number(invoiceId) },
+        data: { status: "Paid" }
+      });
+
+      // 2. Ubah status Kargo jadi Siap Berangkat
+      await tx.shipment.update({
+        where: { id: Number(shipmentId) },
+        data: { status: "NOT DEPARTED YET" }
+      });
+    });
+
+    revalidatePath("/dashboard/billing");
+    revalidatePath("/dashboard/myshipments");
+    return { success: true };
+  } catch (error) {
+    console.error("Gagal konfirmasi pembayaran:", error);
+    return { success: false };
+  }
+}
+
 export async function getCustomerBilling(userId: number) {
   try {
-    const shipments = await prisma.shipment.findMany({
-      where: { userId: userId },
+    // 💡 Menarik data Tagihan resmi dari tabel Invoice
+    const dbInvoices = await prisma.invoice.findMany({
+      where: { shipment: { userId: Number(userId) } },
       include: {
-        items: {
-          include: { packageType: true }
+        shipment: {
+          include: {
+            items: { include: { packageType: true } }
+          }
         }
       },
-      orderBy: { book_date: 'desc' }
+      orderBy: { createdAt: 'desc' }
     });
 
     let totalUnpaid = 0;
     let totalPaid = 0;
     let pendingCount = 0;
 
-    const invoices = shipments.map((s: any) => {
-      const basePrice = s.items?.[0]?.packageType?.base_price ?? 1000000; 
-      
-      const weightFactor = s.weight && s.weight > 0 ? Math.ceil(s.weight / 1000) : 1;
-      const freightCharge = basePrice * weightFactor;
-      
-      const insurance = Math.round(freightCharge * 0.05); 
-      const fuelSurcharge = Math.round(freightCharge * 0.08); 
-      const grandTotal = freightCharge + insurance + fuelSurcharge;
+    const invoices = dbInvoices.map((inv: any) => {
+      const s = inv.shipment;
+      const cleanWeight = s?.weight || 0;
 
-      const isPaid = s.status === "DELIVERED" || s.status === "ARRIVED";
-      const paymentStatus = isPaid ? "Paid" : "Pending";
-
-      if (!isPaid) {
-        totalUnpaid += grandTotal;
+      if (inv.status !== "Paid") {
+        totalUnpaid += inv.amount;
         pendingCount += 1;
       } else {
-        totalPaid += grandTotal;
+        totalPaid += inv.amount;
       }
 
-      const formattedDate = new Date(s.book_date).toLocaleDateString('id-ID', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric'
+      const formattedDate = new Date(inv.createdAt).toLocaleDateString('id-ID', {
+        day: '2-digit', month: 'short', year: 'numeric'
       });
 
+      // Pecah kembali untuk tampilan visual struk (Asumsi persentase)
+      const insurance = Math.round(inv.amount * 0.044); // Aproksimasi dari total
+      const fuel = Math.round(inv.amount * 0.07);
+      const baseCharge = inv.amount - insurance - fuel;
+
       return {
-        id: `INV-${new Date(s.book_date).getFullYear()}-${1000 + s.id}`,
-        ref: s.receipt_number,
+        id: inv.id,
+        invoiceNumString: inv.invoiceNumber,
+        shipmentId: inv.shipmentId,
+        ref: s?.receipt_number || "UNKNOWN",
         date: formattedDate,
-        amount: grandTotal, 
-        status: paymentStatus,
+        amount: inv.amount, 
+        status: inv.status,
         items: [
-          { desc: `Freight Charges (${s.cargoDesc || "Standard Logistical Cargo"})`, price: freightCharge },
-          { desc: "Logistics Protection Insurance (5%)", price: insurance },
-          { desc: "Fuel & Marine Surcharge (8%)", price: fuelSurcharge }
+          { desc: `Freight Charges (${s?.cargoDesc || "Cargo load"}) - ${cleanWeight} KG`, price: baseCharge },
+          { desc: `Logistics Protection Insurance`, price: insurance },
+          { desc: `Fuel & Marine Surcharge`, price: fuel }
         ]
       };
     });
@@ -448,11 +538,90 @@ export async function getCustomerBilling(userId: number) {
       summary: { totalUnpaid, totalPaid, pendingCount }
     };
   } catch (error) {
-    console.error("Gagal memuat data billing dari Neon:", error);
-    return { 
-      success: false, 
-      invoices: [], 
-      summary: { totalUnpaid: 0, totalPaid: 0, pendingCount: 0 } 
-    };
+    console.error("Gagal memuat data billing dari database:", error);
+    return { success: false, invoices: [], summary: { totalUnpaid: 0, totalPaid: 0, pendingCount: 0 } };
+  }
+}
+
+export async function trackShipmentCustomer(receiptNumber: string) {
+  try {
+    const shipment = await prisma.shipment.findUnique({
+      where: { receipt_number: receiptNumber },
+      include: {
+        vessel: true,
+        items: { include: { packageType: true } },
+        details: { orderBy: { update_time: "desc" }, take: 1 }
+      }
+    });
+
+    if (!shipment) return { success: false };
+    return { success: true, data: shipment };
+  } catch (error) {
+    console.error("Tracking Error:", error);
+    return { success: false };
+  }
+}
+
+export async function getCustomerShipments(userId: number) {
+  try {
+    const dbShipments = await prisma.shipment.findMany({
+      where: { userId: Number(userId) },
+      include: {
+        vessel: true,
+        items: { include: { packageType: true } }
+      },
+      orderBy: { book_date: 'desc' }
+    });
+
+    const shipments = dbShipments.map((s: any) => {
+      const formattedDate = s.book_date 
+        ? new Date(s.book_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+        : "-";
+
+      return {
+        id: s.id,
+        receipt_number: s.receipt_number,
+        cargoDesc: s.cargoDesc || "General Cargo Load",
+        senderCity: s.senderCity || "Origin Hub",
+        recipientCity: s.recipientCity || "Destination Port",
+        weight: s.weight ? Number(s.weight) : 0,
+        status: s.status,
+        date: formattedDate
+      };
+    });
+
+    return { success: true, shipments };
+  } catch (error) {
+    console.error("Gagal memuat armada kargo customer:", error);
+    return { success: false, shipments: [] };
+  }
+}
+
+export async function cancelShipmentCustomer(invoiceId: number, shipmentId: number) {
+  try {
+    const cleanInvoiceId = Number(invoiceId);
+    const cleanShipmentId = Number(shipmentId);
+
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.invoice.delete({
+        where: { id: cleanInvoiceId }
+      });
+
+      await tx.shipmentItem.deleteMany({
+        where: { shipmentId: cleanShipmentId }
+      });
+
+      await tx.shipment.delete({
+        where: { id: cleanShipmentId }
+      });
+    });
+
+    revalidatePath("/dashboard/billing");
+    revalidatePath("/dashboard/myshipments");
+    
+    return { success: true, message: "Transaksi berhasil dibatalkan dan dihapus bersih dari sistem." };
+  } catch (error) {
+    console.error("Gagal membatalkan transaksi customer:", error);
+    return { success: false, message: "Terjadi kesalahan internal saat memproses pembatalan kargo." };
   }
 }

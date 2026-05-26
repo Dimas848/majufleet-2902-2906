@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { CreditCard, CheckCircle2, FileText, XCircle, AlertCircle } from "lucide-react";
 import UserNavbar from "@/components/usernavbar";
+// Import Server Actions resmi dari backend actions.ts
+import { getCustomerBilling, confirmInvoicePayment, getCurrentSession, cancelShipmentCustomer } from "@/app/lib/actions";
 
 function BillingHistorySkeleton() {
   return (
@@ -57,34 +59,84 @@ function BillingHistorySkeleton() {
 }
 
 export default function BillingHistoryPage() {
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [summary, setSummary] = useState({ totalUnpaid: 0, totalPaid: 0, pendingCount: 0 });
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [showInvoiceDetail, setShowInvoiceDetail] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 2000);
-    return () => clearTimeout(timer);
+    async function loadBillingData() {
+      try {
+        const session = await getCurrentSession();
+        if (session) {
+          const res = await getCustomerBilling(session.id);
+          if (res.success) {
+            setInvoices(res.invoices);
+            setSummary(res.summary);
+          }
+        }
+      } catch (error) {
+        console.error("Gagal sinkronisasi data finansial:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadBillingData();
   }, []);
 
-  const invoices = [
-    {
-      id: "INV-2026-0401", ref: "MJF-8821-X9", date: "18 Apr 2026", amount: "Rp 12.500.000", status: "Pending",
-      items: [
-        { desc: "Freight Charges (Ever Blue)", price: "Rp 10.000.000" },
-        { desc: "Logistics Insurance", price: "Rp 1.500.000" },
-        { desc: "Fuel Surcharge", price: "Rp 1.000.000" }
-      ]
-    },
-    {
-      id: "INV-2026-0315", ref: "MJF-5542-L1", date: "15 Mar 2026", amount: "Rp 8.200.000", status: "Paid",
-      items: [
-        { desc: "Standard Freight Forwarding", price: "Rp 7.000.000" },
-        { desc: "Handling Fee", price: "Rp 1.200.000" }
-      ]
+  // Handler eksekusi konfirmasi pembayaran langsung ke Neon DB
+  const handlePayment = async () => {
+    if (!selectedInvoice) return;
+    setIsSubmitting(true);
+
+    try {
+      const res = await confirmInvoicePayment(selectedInvoice.id, selectedInvoice.shipmentId);
+      if (res.success) {
+        alert("PAYMENT TRANSACTION CONFIRMED: Status armada diperbarui.");
+        setShowInvoiceDetail(false);
+        window.location.reload(); // Refresh data halaman secara instan
+      } else {
+        alert("Gagal memproses konfirmasi pembayaran. Silakan coba kembali.");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Terjadi gangguan jaringan siber ke server.");
+    } finally {
+      setIsSubmitting(false);
     }
-  ];
+  };
+
+  // Handler penghapusan manifest kargo dari database
+  const handleCancelBooking = async () => {
+    if (!selectedInvoice) return;
+
+    const confirmCancel = window.confirm("Apakah Anda yakin ingin membatalkan dan menghapus permanen pesanan pengiriman ini?");
+    if (!confirmCancel) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await cancelShipmentCustomer(selectedInvoice.id, selectedInvoice.shipmentId);
+      if (res.success) {
+        alert(res.message);
+        setShowInvoiceDetail(false);
+        window.location.reload(); // Refresh halaman agar tabel langsung terupdate
+      } else {
+        alert(res.message);
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Gagal menghubungi server.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Helper pemformatan uang Rupiah agar rapi di UI
+  const formatCurrency = (value: number) => {
+    return "Rp " + value.toLocaleString("id-ID");
+  };
 
   return (
     <div className="min-h-screen bg-[#0a0a0c] flex flex-col relative overflow-x-hidden">
@@ -105,18 +157,19 @@ export default function BillingHistoryPage() {
                 <p className="text-white/50 font-inter text-[14px]">Manage your pending invoices and view transaction logs for all deployments.</p>
               </div>
 
+              {/* Tampilan Ringkasan Finansial Dinamis Terintegrasi Database */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                 <div className="bg-[#121317] border border-[#B026FF]/20 rounded-xl p-6">
                   <p className="text-white/40 font-grotesk text-[10px] uppercase tracking-[2px] mb-2">Total Unpaid Amount</p>
-                  <p className="text-[#E5B5FF] font-inter font-bold text-2xl">Rp 12.500.000</p>
+                  <p className="text-[#E5B5FF] font-inter font-bold text-2xl">{formatCurrency(summary.totalUnpaid)}</p>
                 </div>
                 <div className="bg-[#121317] border border-white/5 rounded-xl p-6">
                   <p className="text-white/40 font-grotesk text-[10px] uppercase tracking-[2px] mb-2">Pending Invoices</p>
-                  <p className="text-white font-inter font-bold text-2xl">1 <span className="text-[14px] text-white/30 font-normal">deployment</span></p>
+                  <p className="text-white font-inter font-bold text-2xl">{summary.pendingCount} <span className="text-[14px] text-white/30 font-normal">deployment</span></p>
                 </div>
                 <div className="bg-[#121317] border border-white/5 rounded-xl p-6">
                   <p className="text-white/40 font-grotesk text-[10px] uppercase tracking-[2px] mb-2">Total Completed</p>
-                  <p className="text-white font-inter font-bold text-2xl">Rp 8.200.000</p>
+                  <p className="text-white font-inter font-bold text-2xl">{formatCurrency(summary.totalPaid)}</p>
                 </div>
               </div>
 
@@ -136,10 +189,10 @@ export default function BillingHistoryPage() {
                     <tbody className="text-white font-inter text-[13px]">
                       {invoices.filter(i => i.status === "Pending").map(invoice => (
                         <tr key={invoice.id} className="border-b border-white/5 hover:bg-[#B026FF]/5 transition-colors">
-                          <td className="p-4 font-mono text-[#E5B5FF]">{invoice.id}</td>
+                          <td className="p-4 font-mono text-[#E5B5FF]">{invoice.invoiceNumString}</td>
                           <td className="p-4 text-white/70">{invoice.ref}</td>
                           <td className="p-4 text-white/70">{invoice.date}</td>
-                          <td className="p-4 font-bold">{invoice.amount}</td>
+                          <td className="p-4 font-bold">{formatCurrency(invoice.amount)}</td>
                           <td className="p-4">
                             <button onClick={() => {setSelectedInvoice(invoice); setShowInvoiceDetail(true);}} className="bg-[#B026FF] hover:bg-[#9a1ce6] text-white px-4 py-1.5 rounded text-[11px] font-bold uppercase tracking-wider transition-all">Confirm Payment</button>
                           </td>
@@ -166,10 +219,10 @@ export default function BillingHistoryPage() {
                     <tbody className="text-white font-inter text-[13px]">
                       {invoices.filter(i => i.status === "Paid").map(invoice => (
                         <tr key={invoice.id} className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer" onClick={() => {setSelectedInvoice(invoice); setShowInvoiceDetail(true);}}>
-                          <td className="p-4 font-mono text-white/40">{invoice.id}</td>
+                          <td className="p-4 font-mono text-white/40">{invoice.invoiceNumString}</td>
                           <td className="p-4 text-white/70">{invoice.ref}</td>
                           <td className="p-4 text-white/70">{invoice.date}</td>
-                          <td className="p-4">{invoice.amount}</td>
+                          <td className="p-4">{formatCurrency(invoice.amount)}</td>
                           <td className="p-4"><span className="text-[#10B981] flex items-center gap-1 text-[11px] uppercase tracking-wider font-bold"><CheckCircle2 size={12}/> Success</span></td>
                         </tr>
                       ))}
@@ -193,7 +246,7 @@ export default function BillingHistoryPage() {
               <div className="flex justify-between items-start mb-8">
                 <div>
                   <h2 className="text-white font-grotesk font-bold text-2xl uppercase tracking-wider mb-1">Invoice Detail</h2>
-                  <p className="text-white/40 font-mono text-[12px]">{selectedInvoice.id}</p>
+                  <p className="text-white/40 font-mono text-[12px]">{selectedInvoice.invoiceNumString}</p>
                 </div>
                 <div className={`px-3 py-1 rounded border text-[10px] font-bold uppercase tracking-widest ${selectedInvoice.status === "Pending" ? "border-orange-500/50 text-orange-500 bg-orange-500/5" : "border-[#10B981]/50 text-[#10B981] bg-[#10B981]/5"}`}>
                   {selectedInvoice.status}
@@ -209,12 +262,12 @@ export default function BillingHistoryPage() {
                   {selectedInvoice.items.map((item: any, idx: number) => (
                     <div key={idx} className="flex justify-between text-[12px]">
                       <span className="text-white/60">{item.desc}</span>
-                      <span className="text-white font-mono">{item.price}</span>
+                      <span className="text-white font-mono">{formatCurrency(item.price)}</span>
                     </div>
                   ))}
                   <div className="pt-3 mt-1 border-t border-white/10 flex justify-between items-end">
                     <span className="text-white/40 font-grotesk text-[10px] uppercase">Grand Total</span>
-                    <span className="text-[#B026FF] font-inter font-bold text-xl">{selectedInvoice.amount}</span>
+                    <span className="text-[#B026FF] font-inter font-bold text-xl">{formatCurrency(selectedInvoice.amount)}</span>
                   </div>
                 </div>
               </div>
@@ -227,8 +280,22 @@ export default function BillingHistoryPage() {
                       Make payment to the Maju Fleet account to process your cargo delivery to the next stage..
                     </p>
                   </div>
-                  <button onClick={() => {alert("Redirecting to secure gateway..."); setShowInvoiceDetail(false);}} className="w-full bg-[#B026FF] py-4 rounded-lg text-white font-grotesk font-bold text-[14px] uppercase tracking-[3px] shadow-[0_0_20px_rgba(176,38,255,0.3)] hover:bg-[#9a1ce6] transition-all">
-                    Proceed to Pay
+                  
+                  {/* 💡 SINKRONISASI BARU: Tombol Pembatalan Manifest Kargo Permanen dari Database Neon */}
+                  <button 
+                    onClick={handleCancelBooking}
+                    disabled={isSubmitting}
+                    className="w-full bg-transparent border border-red-500/40 hover:bg-red-500/10 text-red-400 py-3.5 rounded-lg font-grotesk font-bold text-[12px] uppercase tracking-[2px] transition-all disabled:opacity-30"
+                  >
+                    {isSubmitting ? "Processing Clearance..." : "Cancel & Delete Shipment"}
+                  </button>
+
+                  <button 
+                    onClick={handlePayment} 
+                    disabled={isSubmitting}
+                    className="w-full bg-[#B026FF] py-4 rounded-lg text-white font-grotesk font-bold text-[14px] uppercase tracking-[3px] shadow-[0_0_20px_rgba(176,38,255,0.3)] hover:bg-[#9a1ce6] transition-all disabled:opacity-50"
+                  >
+                    {isSubmitting ? "Processing Clearance..." : "Proceed to Pay"}
                   </button>
                 </div>
               ) : (

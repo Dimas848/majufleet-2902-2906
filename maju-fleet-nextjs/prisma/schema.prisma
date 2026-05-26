@@ -50,6 +50,18 @@ model Port {
   destShipments   Shipment[] @relation("DestPort")
 }
 
+model Invoice {
+  id            Int      @id @default(autoincrement())
+  invoiceNumber String   @unique // Contoh: INV-2026-0001
+  amount        Int      // Total biaya dalam Rupiah
+  status        String   @default("Pending") // "Pending" atau "Paid"
+  createdAt     DateTime @default(now())
+  
+  // Relasi 1-to-1 ke Shipment
+  shipmentId    Int      @unique
+  shipment      Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+}
+
 model Shipment {
   id             Int      @id @default(autoincrement())
   receipt_number String   @unique
@@ -93,6 +105,8 @@ model Shipment {
 
   items          ShipmentItem[]
   details        ShipmentDetail[]
+
+  invoice        Invoice?       
 }
 
 model PackageType {
