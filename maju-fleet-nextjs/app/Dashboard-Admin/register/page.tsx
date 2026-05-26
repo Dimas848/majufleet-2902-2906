@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { 
   Hash, Users, MapPin, Package, RefreshCw, Briefcase, ChevronDown, 
-  Search, Plus, Edit, Trash2, CheckCircle, Mail, Phone
+  Search, Plus, Edit, Trash2, CheckCircle, Mail, Phone, Ship, Filter
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation";
@@ -24,6 +24,8 @@ function AdminControlContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  const [fleetStatusFilter, setFleetStatusFilter] = useState("ALL");
+
   const [shipments, setShipments] = useState<any[]>([]);
   const [crews, setCrews] = useState<any[]>([]);
   const [customers, setCustomers] = useState<any[]>([]);
@@ -37,11 +39,11 @@ function AdminControlContent() {
       setActiveTab(typeParam);
       setViewMode("table");
       setSearchQuery("");
+      setFleetStatusFilter("ALL");
     }
   }, [searchParams]);
 
-  // Reset page saat ganti tab atau search
-  useEffect(() => { setCurrentPage(1); }, [activeTab, searchQuery]);
+  useEffect(() => { setCurrentPage(1); }, [activeTab, searchQuery, fleetStatusFilter]);
 
   const fetchNeonData = async () => {
     setIsLoading(true);
@@ -82,13 +84,14 @@ function AdminControlContent() {
 
   const handleAddNew = () => {
     setEditingId(null);
-    setFormData(activeTab === "fleet" ? { weightUnit: "KG" } : activeTab === "vessel" ? { capacityUnit: "TONNES" } : {});
+    setFormData(activeTab === "fleet" ? { weightUnit: "KG", status: "PENDING", packageTypeId: "2", vesselId: "", captain: "" } : activeTab === "vessel" ? { capacityUnit: "TONNES" } : {});
     setViewMode("form");
   };
 
   const handleEdit = (item: any) => {
     setEditingId(item.id);
-    setFormData({ ...item });
+    const currentPackageId = item.items && item.items.length > 0 ? String(item.items[0].packageTypeId) : "2";
+    setFormData({ ...item, packageTypeId: currentPackageId, vesselId: item.vesselId ? String(item.vesselId) : "" });
     setViewMode("form");
   };
 
@@ -108,30 +111,20 @@ function AdminControlContent() {
     }
   };
 
-  // ==========================================
-  // REVISI LOGIKA VALIDASI EMAIL PADA SAVE
-  // ==========================================
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Proteksi Khusus Tab Fleet Registration
     if (activeTab === "fleet") {
       const senderEmail = formData.senderEmail ? String(formData.senderEmail).trim() : "";
       const recipientEmail = formData.recipientEmail ? String(formData.recipientEmail).trim() : "";
 
-      if (!senderEmail.includes("@")) {
-        alert("VALIDATION ERROR: Sender Email Address must contain an '@' symbol!");
-        return;
-      }
-
-      if (!recipientEmail.includes("@")) {
-        alert("VALIDATION ERROR: Recipient Email Address must contain an '@' symbol!");
+      if (!senderEmail.includes("@") || !recipientEmail.includes("@")) {
+        alert("VALIDATION ERROR: Email Address must contain an '@' symbol!");
         return;
       }
     }
 
     setIsLoading(true);
-
     const result = await saveEntity(activeTab, formData, editingId);
     if (result.success) {
       alert("Data successfully synchronized with Neon Database!");
@@ -166,6 +159,20 @@ function AdminControlContent() {
     const totalPages = Math.ceil(arr.length / itemsPerPage);
     const paginated = arr.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     return { paginated, totalPages };
+  };
+
+  const getStatusBadgeStyle = (status: string) => {
+    const s = status ? status.toUpperCase() : "PENDING";
+    if (s === "DELIVERED" || s === "ARRIVED") {
+      return "bg-[#34C759]/10 text-[#34C759] border-[#34C759]/20 shadow-[0_0_10px_rgba(52,199,89,0.1)]";
+    }
+    if (s === "DELAYED" || s === "NOT DEPARTED YET") {
+      return "bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/20 shadow-[0_0_10px_rgba(255,59,48,0.1)]";
+    }
+    if (s === "EN ROUTE") {
+      return "bg-[#00E3FD]/10 text-[#00E3FD] border-[#00E3FD]/20 shadow-[0_0_10px_rgba(0,227,253,0.1)]";
+    }
+    return "bg-[#FFCC00]/10 text-[#FFCC00] border-[#FFCC00]/20 shadow-[0_0_10px_rgba(255,204,0,0.1)]";
   };
 
   const PaginationBar = ({ total }: { total: number }) => {
@@ -218,19 +225,12 @@ function AdminControlContent() {
         <div className="h-3 w-16 bg-white/10 rounded"></div>
         <div className="h-3 w-32 bg-white/10 rounded"></div>
         <div className="h-3 w-20 bg-white/10 rounded"></div>
-        {activeTab !== "customer" && <div className="h-3 w-12 bg-white/10 rounded"></div>}
       </div>
-      {[1, 2, 3, 4].map(i => (
+      {[...Array(4)].map((_, i) => (
         <div key={i} className="p-4 border-b border-white/5 flex justify-between items-center">
           <div className="h-4 w-20 bg-white/5 rounded"></div>
           <div className="h-4 w-48 bg-white/5 rounded"></div>
           <div className="h-6 w-16 bg-white/5 rounded-full"></div>
-          {activeTab !== "customer" && (
-            <div className="flex gap-3">
-              <div className="h-5 w-5 bg-white/5 rounded"></div>
-              <div className="h-5 w-5 bg-white/5 rounded"></div>
-            </div>
-          )}
         </div>
       ))}
     </div>
@@ -240,25 +240,8 @@ function AdminControlContent() {
     <div className="max-w-[1000px] w-full bg-[#121317] p-8 rounded-lg border border-white/5 animate-pulse">
       <div className="h-6 w-64 bg-white/10 rounded mb-10"></div>
       <div className="flex flex-col gap-10">
-        <div>
-          <div className="h-5 w-48 bg-white/10 rounded mb-6"></div>
-          <div className="flex gap-6">
-            <div className="h-12 w-full bg-white/5 rounded"></div>
-            <div className="h-12 w-32 bg-white/5 rounded"></div>
-          </div>
-        </div>
-        <div>
-          <div className="h-5 w-48 bg-white/10 rounded mb-6"></div>
-          <div className="grid grid-cols-2 gap-8">
-            <div className="h-12 w-full bg-white/5 rounded"></div>
-            <div className="h-12 w-full bg-white/5 rounded"></div>
-            <div className="col-span-2 h-12 w-full bg-white/5 rounded"></div>
-          </div>
-        </div>
-        <div className="mt-14 flex gap-4">
-          <div className="h-14 w-1/3 bg-white/5 rounded"></div>
-          <div className="h-14 flex-1 bg-white/10 rounded"></div>
-        </div>
+        <div className="h-12 w-full bg-white/5 rounded"></div>
+        <div className="h-12 w-full bg-white/5 rounded"></div>
       </div>
     </div>
   );
@@ -275,15 +258,37 @@ function AdminControlContent() {
         </div>
 
         <div className="flex flex-col md:flex-row justify-between gap-4 mb-8 bg-[#121317] p-4 rounded-lg border border-white/5">
-          <div className="relative w-full md:w-[400px]">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={18} />
-            <input 
-              type="text" 
-              placeholder={`Search in ${activeTab}...`}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-[#1a1b22] border-none rounded py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-white/30 focus:ring-1 focus:ring-[#B026FF] outline-none transition-all"
-            />
+          <div className="flex flex-1 flex-col sm:flex-row gap-4">
+            <div className="relative w-full md:w-[360px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" size={18} />
+              <input 
+                type="text" 
+                placeholder={`Search in ${activeTab}...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-[#1a1b22] border-none rounded py-2.5 pl-10 pr-4 text-sm text-white placeholder:text-white/30 focus:ring-1 focus:ring-[#B026FF] outline-none transition-all"
+              />
+            </div>
+
+            {activeTab === "fleet" && viewMode === "table" && (
+              <div className="relative">
+                <select 
+                  value={fleetStatusFilter} 
+                  onChange={(e) => setFleetStatusFilter(e.target.value)}
+                  className="bg-[#1a1b22] border border-white/10 rounded py-2.5 pl-10 pr-10 text-xs font-mono tracking-widest text-[#E5B5FF] appearance-none outline-none cursor-pointer focus:border-[#B026FF] uppercase h-full"
+                >
+                  <option value="ALL">FILTER STATUS: ALL</option>
+                  <option value="PENDING">PENDING</option>
+                  <option value="EN ROUTE">EN ROUTE</option>
+                  <option value="DELAYED">DELAYED</option>
+                  <option value="ARRIVED">ARRIVED</option>
+                  <option value="DELIVERED">DELIVERED</option>
+                  <option value="NOT DEPARTED YET">NOT DEPARTED YET</option>
+                </select>
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#B026FF]"><Filter size={14} /></div>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={14} /></div>
+              </div>
+            )}
           </div>
           
           {activeTab !== "customer" && (
@@ -307,11 +312,7 @@ function AdminControlContent() {
             </motion.div>
           ) : viewMode === "table" ? (
             <motion.div 
-              key="table-view"
-              initial={{ opacity: 0, scale: 0.98 }} 
-              animate={{ opacity: 1, scale: 1 }} 
-              exit={{ opacity: 0, scale: 0.98 }} 
-              transition={{ duration: 0.2 }}
+              key="table-view" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }} transition={{ duration: 0.2 }}
               className="bg-[#121317] rounded-lg border border-white/5 overflow-hidden"
             >
               <div className="overflow-x-auto">
@@ -321,33 +322,34 @@ function AdminControlContent() {
                       <th className="p-4 font-mono text-[11px] text-white/40 tracking-[2px] uppercase">ID / Code</th>
                       <th className="p-4 font-mono text-[11px] text-white/40 tracking-[2px] uppercase">Primary Info</th>
                       <th className="p-4 font-mono text-[11px] text-white/40 tracking-[2px] uppercase">Status / Details</th>
-                      {activeTab !== "customer" && (
-                        <th className="p-4 font-mono text-[11px] text-white/40 tracking-[2px] uppercase text-right">Actions</th>
-                      )}
+                      <th className="p-4 font-mono text-[11px] text-white/40 tracking-[2px] uppercase text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
 
-                    {/* ========== FLEET TAB ========== */}
                     {activeTab === "fleet" && (() => {
-                      const filtered = filterData(shipments, ['code', 'senderName', 'recipientName', 'status']);
+                      let filtered = filterData(shipments, ['code', 'senderName', 'recipientName', 'status']);
+                      if (fleetStatusFilter !== "ALL") {
+                        filtered = filtered.filter(s => s.status === fleetStatusFilter);
+                      }
                       const { paginated } = paginate(filtered);
                       return paginated.map(s => (
                         <tr key={s.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                           <td className="p-4 text-sm font-mono text-white/70">{s.code}</td>
                           <td className="p-4 text-sm text-white">{s.senderName} ({s.senderCity}) → {s.recipientName} ({s.recipientCity})</td>
                           <td className="p-4">
-                            <span className="px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">{s.status}</span>
+                            <span className={`px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-full border ${getStatusBadgeStyle(s.status)}`}>
+                              {s.status}
+                            </span>
                           </td>
                           <td className="p-4 flex justify-end gap-3">
-                            <button onClick={() => handleEdit(s)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
-                            <button onClick={() => handleDelete(s.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
+                            <button type="button" onClick={() => handleEdit(s)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
+                            <button type="button" onClick={() => handleDelete(s.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
                           </td>
                         </tr>
                       ));
                     })()}
 
-                    {/* ========== CUSTOMER TAB ========== */}
                     {activeTab === "customer" && (() => {
                       const filtered = filterData(customers, ['name', 'email', 'phone']);
                       const { paginated } = paginate(filtered);
@@ -358,7 +360,7 @@ function AdminControlContent() {
                             <span className="font-bold text-[15px]">{c.name}</span>
                             <div className="flex flex-col gap-1 mt-2 text-white/50">
                               <span className="flex items-center gap-2 text-xs"><Mail size={12}/> {c.email}</span>
-                              <span className="flex items-center gap-2 text-xs"><Phone size={12}/> {c.phone || c.contact || "-"}</span>
+                              <span className="flex items-center gap-2 text-xs"><Phone size={12}/> {c.phone || "-"}</span>
                               <span className="flex items-center gap-2 text-xs"><MapPin size={12}/> {c.address || "-"}</span>
                             </div>
                           </td>
@@ -367,45 +369,42 @@ function AdminControlContent() {
                               <CheckCircle size={12}/> {c.status || 'Active'}
                             </span>
                           </td>
+                          <td className="p-4 flex justify-end gap-3 align-top">
+                            <button type="button" onClick={() => handleDelete(c.id)} className="text-white/40 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-500/10">
+                              <Trash2 size={18} />
+                            </button>
+                          </td>
                         </tr>
                       ));
                     })()}
 
-                    {/* ========== CREW TAB ========== */}
                     {activeTab === "crew" && (() => {
                       const filtered = filterData(crews, ['name', 'email', 'role']);
                       const { paginated } = paginate(filtered);
                       return paginated.map(c => (
                         <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                           <td className="p-4 text-sm font-mono text-white/70">CRW-{c.id}</td>
-                          <td className="p-4 text-sm text-white">
-                            {c.name} <br/>
-                            <span className="text-xs text-white/40">{c.email}</span>
-                          </td>
-                          <td className="p-4 text-sm text-white/50 uppercase">{c.role || 'crew'}</td>
+                          <td className="p-4 text-sm text-white">{c.name} <br/><span className="text-xs text-white/40">{c.email}</span></td>
+                          <td className="p-4 text-sm text-white/50 uppercase">{c.role ? c.role.replace(/_/g, ' ') : 'crew'}</td>
                           <td className="p-4 flex justify-end gap-3">
-                            <button onClick={() => handleEdit(c)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
-                            <button onClick={() => handleDelete(c.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
+                            <button type="button" onClick={() => handleEdit(c)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
+                            <button type="button" onClick={() => handleDelete(c.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
                           </td>
                         </tr>
                       ));
                     })()}
 
-                    {/* ========== VESSEL TAB ========== */}
                     {activeTab === "vessel" && (() => {
-                      const filtered = filterData(vessels, ['name', 'crew_lead', 'type']);
+                      const filtered = filterData(vessels, ['name', 'crewLead', 'type']);
                       const { paginated } = paginate(filtered);
                       return paginated.map(v => (
                         <tr key={v.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
                           <td className="p-4 text-sm font-mono text-white/70">VSL-{v.id}</td>
-                          <td className="p-4 text-sm text-white">
-                            {v.name} <br/>
-                            <span className="text-xs text-white/40">Lead: {v.crew_lead || v.crewLead || "None"}</span>
-                          </td>
+                          <td className="p-4 text-sm text-white">{v.name} <br/><span className="text-xs text-white/40">Lead: {v.crewLead || "None"}</span></td>
                           <td className="p-4 text-sm text-white/50">{v.capacity} {v.capacityUnit || "TONNES"}</td>
                           <td className="p-4 flex justify-end gap-3">
-                            <button onClick={() => handleEdit(v)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
-                            <button onClick={() => handleDelete(v.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
+                            <button type="button" onClick={() => handleEdit(v)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
+                            <button type="button" onClick={() => handleDelete(v.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
                           </td>
                         </tr>
                       ));
@@ -415,14 +414,16 @@ function AdminControlContent() {
                 </table>
               </div>
 
-              {/* ========== PAGINATION BAR ========== */}
-              {activeTab === "fleet" && <PaginationBar total={filterData(shipments, ['code', 'senderName', 'recipientName', 'status']).length} />}
+              {activeTab === "fleet" && (() => {
+                let filtered = filterData(shipments, ['code', 'senderName', 'recipientName', 'status']);
+                if (fleetStatusFilter !== "ALL") filtered = filtered.filter(s => s.status === fleetStatusFilter);
+                return <PaginationBar total={filtered.length} />;
+              })()}
               {activeTab === "customer" && <PaginationBar total={filterData(customers, ['name', 'email', 'phone']).length} />}
               {activeTab === "crew" && <PaginationBar total={filterData(crews, ['name', 'email', 'role']).length} />}
-              {activeTab === "vessel" && <PaginationBar total={filterData(vessels, ['name', 'crew_lead', 'type']).length} />}
+              {activeTab === "vessel" && <PaginationBar total={filterData(vessels, ['name', 'crewLead', 'type']).length} />}
 
             </motion.div>
-
           ) : (
             <motion.div 
               key="form-view" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}
@@ -441,7 +442,7 @@ function AdminControlContent() {
                           <input type="text" readOnly value={formData.code || ""} className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF] transition-colors" />
                         </div>
                         {!editingId && (
-                          <button type="button" onClick={() => generateCode('MJF')} className="px-6 py-3 border border-white/10 rounded text-white/60 text-[12px] font-bold tracking-[2px] uppercase hover:text-white hover:border-white/50 transition-colors flex items-center gap-2">
+                          <button type="button" onClick={() => generateCode('MJF-RND')} className="px-6 py-3 border border border-white/10 rounded text-white/60 text-[12px] font-bold tracking-[2px] uppercase hover:text-white hover:border-white/50 transition-colors flex items-center gap-2">
                             <RefreshCw size={16} /> GENERATE NEW
                           </button>
                         )}
@@ -463,11 +464,62 @@ function AdminControlContent() {
 
                     <div>
                       <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
-                        <Users size={20} /> CREW INFORMATION
+                        <Ship size={20} /> FLEET & CREW ASSIGNMENT
                       </h2>
-                      <div className="w-full sm:w-[60%]">
-                        <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">ASSIGNED CAPTAIN</label>
-                        <input type="text" value={formData.captain || ""} onChange={e => setFormData({...formData, captain: e.target.value})} required placeholder="Enter captain's name..." className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white placeholder:text-white/30 focus:border-[#B026FF] outline-none transition-colors" />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div>
+                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">ASSIGNED VESSEL</label>
+                          <div className="relative">
+                            <select
+                              value={formData.vesselId || ""}
+                              onChange={e => {
+                                const vId = e.target.value;
+                                const selectedV = vessels.find(v => String(v.id) === vId);
+
+                                // ✅ FIX: Cari crew yang namanya cocok dengan crewLead vessel (case-insensitive)
+                                // Ini mencegah auto-select ke crew yang salah akibat perbedaan kapitalisasi
+                                const matchedCrew = selectedV?.crewLead
+                                  ? crews.find(
+                                      c => c.name?.trim().toLowerCase() === selectedV.crewLead?.trim().toLowerCase()
+                                    )
+                                  : null;
+
+                                setFormData({
+                                  ...formData,
+                                  vesselId: vId,
+                                  // Jika ada crew yang cocok gunakan namanya, jika tidak kosongkan agar user pilih manual
+                                  captain: matchedCrew ? matchedCrew.name : ""
+                                });
+                              }}
+                              required
+                              className="w-full bg-[#1a1b22] border-none rounded py-3.5 px-5 text-[16px] text-white/80 appearance-none outline-none focus:ring-1 focus:ring-[#B026FF] cursor-pointer"
+                            >
+                              <option value="" disabled hidden>Select operational vessel...</option>
+                              {vessels.map(v => (
+                                <option key={v.id} value={v.id}>{v.name} ({v.type || "Cargo Fleet"})</option>
+                              ))}
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">ASSIGNED CAPTAIN / CREW LEAD</label>
+                          <div className="relative">
+                            <select
+                              value={formData.captain || ""}
+                              onChange={e => setFormData({...formData, captain: e.target.value})}
+                              required
+                              className="w-full bg-[#1a1b22] border-none rounded py-3.5 px-5 text-[16px] text-white/80 appearance-none outline-none focus:ring-1 focus:ring-[#B026FF] cursor-pointer"
+                            >
+                              <option value="" disabled hidden>Select captain on board...</option>
+                              {crews.map(c => (
+                                <option key={c.id} value={c.name}>{c.name} ({c.role ? c.role.replace(/_/g, ' ').toUpperCase() : "CREW"})</option>
+                              ))}
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -544,7 +596,7 @@ function AdminControlContent() {
                           <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">ITEM DESCRIPTION</label>
                           <input type="text" value={formData.cargoDesc || ""} onChange={e => setFormData({...formData, cargoDesc: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-end">
                           <div className="flex gap-2 items-end relative border-b border-[#B026FF]">
                             <div className="flex-1">
                               <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">WEIGHT</label>
@@ -567,11 +619,29 @@ function AdminControlContent() {
                             <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">CATEGORY</label>
                             <div className="relative">
                               <select value={formData.category || ""} onChange={e => setFormData({...formData, category: e.target.value})} required className="w-full bg-[#1a1b22] border-none rounded py-3.5 px-5 text-[16px] text-white/80 appearance-none outline-none focus:ring-1 focus:ring-[#B026FF]">
-                                <option value="" disabled hidden>Select category...</option>
+                                <option value=" " disabled hidden>Select category...</option>
                                 <option value="electronics">Electronics</option>
                                 <option value="clothing">Clothing</option>
                                 <option value="food">Food & Beverage</option>
                                 <option value="heavy">Heavy Machinery</option>
+                              </select>
+                              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">PACKAGE TYPE (SERVICE)</label>
+                            <div className="relative">
+                              <select 
+                                value={formData.packageTypeId || "2"} 
+                                onChange={e => setFormData({...formData, packageTypeId: e.target.value})} 
+                                required 
+                                className="w-full bg-[#1a1b22] border-none rounded py-3.5 px-5 text-[16px] text-white/80 appearance-none outline-none focus:ring-1 focus:ring-[#B026FF]"
+                              >
+                                <option value="1">MAJU ECONOMY</option>
+                                <option value="2">MAJU STANDARD</option>
+                                <option value="3">MAJU HEAVY</option>
+                                <option value="4">MAJU EXPRESS</option>
+                                <option value="5">MAJU VIP</option>
                               </select>
                               <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                             </div>
@@ -654,7 +724,7 @@ function AdminControlContent() {
                         </div>
                         <div className="col-span-2">
                           <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">CONTACT NUMBER</label>
-                          <input type="text" value={formData.contact || formData.phone || ""} onChange={e => setFormData({...formData, contact: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <input type="text" value={formData.contact || ""} onChange={e => setFormData({...formData, contact: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
                         </div>
                       </div>
                     </div>
@@ -692,7 +762,7 @@ function AdminControlContent() {
                         </div>
                         <div className="col-span-2">
                           <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">ASSIGNED CREW LEAD</label>
-                          <input type="text" value={formData.crew_lead || formData.crewLead || ""} onChange={e => setFormData({...formData, crew_lead: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <input type="text" value={formData.crewLead || ""} onChange={e => setFormData({...formData, crewLead: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
                         </div>
                         <div>
                           <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">OPERATIONAL STATUS</label>
@@ -704,34 +774,6 @@ function AdminControlContent() {
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                           </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {activeTab === "customer" && (
-                  <div className="flex flex-col gap-10">
-                    <div>
-                      <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
-                        <Users size={20} /> CUSTOMER DETAILS
-                      </h2>
-                      <div className="grid grid-cols-2 gap-x-8 gap-y-8">
-                        <div className="col-span-2">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">CUSTOMER NAME / COMPANY</label>
-                          <input type="text" value={formData.name || ""} onChange={e => setFormData({...formData, name: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
-                        </div>
-                        <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">EMAIL ADDRESS</label>
-                          <input type="email" value={formData.email || ""} onChange={e => setFormData({...formData, email: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
-                        </div>
-                        <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">CONTACT NUMBER</label>
-                          <input type="text" value={formData.phone || formData.contact || ""} onChange={e => setFormData({...formData, phone: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
-                        </div>
-                        <div className="col-span-2">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">FULL ADDRESS</label>
-                          <input type="text" value={formData.address || ""} onChange={e => setFormData({...formData, address: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
                         </div>
                       </div>
                     </div>
