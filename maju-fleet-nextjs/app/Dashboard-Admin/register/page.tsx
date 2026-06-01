@@ -3,7 +3,8 @@
 import React, { useState, useEffect, Suspense } from "react";
 import { 
   Hash, Users, MapPin, Package, RefreshCw, Briefcase, ChevronDown, 
-  Search, Plus, Edit, Trash2, CheckCircle, Mail, Phone, Ship, Filter
+  Search, Plus, Edit, Trash2, CheckCircle, Mail, Phone, Ship, Filter,
+  AlertCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation";
@@ -32,6 +33,10 @@ function AdminControlContent() {
   const [vessels, setVessels] = useState<any[]>([]);
 
   const [formData, setFormData] = useState<any>({});
+  
+  // State untuk custom error handling UI
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [generalError, setGeneralError] = useState<string | null>(null);
 
   useEffect(() => {
     const typeParam = searchParams.get("type") as EntityType;
@@ -80,11 +85,14 @@ function AdminControlContent() {
   const generateCode = (prefix: string) => {
     const randomNum = Math.floor(100000 + Math.random() * 900000);
     setFormData({ ...formData, code: `${prefix}-${randomNum}` });
+    clearError("code");
   };
 
   const handleAddNew = () => {
     setEditingId(null);
     setFormData(activeTab === "fleet" ? { weightUnit: "KG", status: "PENDING", packageTypeId: "2", vesselId: "", captain: "" } : activeTab === "vessel" ? { capacityUnit: "TONNES" } : {});
+    setFormErrors({});
+    setGeneralError(null);
     setViewMode("form");
   };
 
@@ -92,6 +100,8 @@ function AdminControlContent() {
     setEditingId(item.id);
     const currentPackageId = item.items && item.items.length > 0 ? String(item.items[0].packageTypeId) : "2";
     setFormData({ ...item, packageTypeId: currentPackageId, vesselId: item.vesselId ? String(item.vesselId) : "" });
+    setFormErrors({});
+    setGeneralError(null);
     setViewMode("form");
   };
 
@@ -100,42 +110,131 @@ function AdminControlContent() {
     if (!confirmDelete) return;
 
     setIsLoading(true);
-    const result = await deleteEntity(activeTab, id);
-    if (result.success) {
-      alert("Data successfully deleted from Neon database!");
-      fetchNeonData(); 
-      setViewMode("table");
-    } else {
-      alert("Error: Failed to delete data from server.");
+    try {
+      const result = await deleteEntity(activeTab, id) as { success: boolean; message?: string };
+      if (result.success) {
+        alert("Data successfully deleted from Neon database!");
+        fetchNeonData(); 
+        setViewMode("table");
+      } else {
+        alert(`Error: ${result.message || "Failed to delete data from server."}`);
+      }
+    } catch (error) {
+      console.error("Kesalahan saat menghapus data:", error);
+      alert("Terjadi gangguan jaringan siber ke server saat menghapus data.");
+    } finally {
       setIsLoading(false);
     }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormErrors({});
+    setGeneralError(null);
 
+    let errors: Record<string, string> = {};
+
+    // Custom Validation
     if (activeTab === "fleet") {
-      const senderEmail = formData.senderEmail ? String(formData.senderEmail).trim() : "";
-      const recipientEmail = formData.recipientEmail ? String(formData.recipientEmail).trim() : "";
-
-      if (!senderEmail.includes("@") || !recipientEmail.includes("@")) {
-        alert("VALIDATION ERROR: Email Address must contain an '@' symbol!");
-        return;
+      if (!formData.vesselId) errors.vesselId = "Please select an operational vessel.";
+      if (!formData.captain) errors.captain = "Please select a captain on board.";
+      
+      if (!formData.senderName) errors.senderName = "Please enter sender's name.";
+      if (!formData.senderContact) errors.senderContact = "Please enter sender's contact.";
+      if (!formData.senderEmail) {
+        errors.senderEmail = "Please enter sender's email address.";
+      } else if (!String(formData.senderEmail).includes("@")) {
+        errors.senderEmail = "Email address must contain an '@' symbol.";
       }
+      if (!formData.senderAddress) errors.senderAddress = "Please enter origin address.";
+      if (!formData.senderCountry) errors.senderCountry = "Please enter origin country.";
+      if (!formData.senderCity) errors.senderCity = "Please enter origin city.";
+
+      if (!formData.recipientName) errors.recipientName = "Please enter recipient's name.";
+      if (!formData.recipientContact) errors.recipientContact = "Please enter recipient's contact.";
+      if (!formData.recipientEmail) {
+        errors.recipientEmail = "Please enter recipient's email address.";
+      } else if (!String(formData.recipientEmail).includes("@")) {
+        errors.recipientEmail = "Email address must contain an '@' symbol.";
+      }
+      if (!formData.recipientAddress) errors.recipientAddress = "Please enter destination address.";
+      if (!formData.recipientCountry) errors.recipientCountry = "Please enter destination country.";
+      if (!formData.recipientCity) errors.recipientCity = "Please enter destination city.";
+
+      if (!formData.cargoDesc) errors.cargoDesc = "Please enter a description for the cargo.";
+      if (!formData.weight || parseFloat(formData.weight) <= 0) errors.weight = "Please enter a weight greater than 0.";
+      if (!formData.dimensions) errors.dimensions = "Please enter cargo dimensions.";
+      if (!formData.category || formData.category === " ") errors.category = "Please select a cargo category.";
+    } else if (activeTab === "crew") {
+      if (!formData.name) errors.name = "Please enter full name.";
+      if (!formData.email) {
+        errors.email = "Please enter an email address.";
+      } else if (!String(formData.email).includes("@")) {
+        errors.email = "Email address must contain an '@' symbol.";
+      }
+      if (!formData.gender) errors.gender = "Please select gender.";
+      if (!formData.age || parseInt(formData.age) <= 0) errors.age = "Please enter a valid age.";
+      if (!formData.role) errors.role = "Please select a specialist role.";
+      if (!formData.origin) errors.origin = "Please enter origin city/country.";
+      if (!formData.contact) errors.contact = "Please enter contact number.";
+    } else if (activeTab === "vessel") {
+      if (!formData.name) errors.name = "Please enter vessel name.";
+      if (!formData.capacity || parseFloat(formData.capacity) <= 0) errors.capacity = "Please enter a valid capacity.";
+      if (!formData.type) errors.type = "Please enter vessel type.";
+      if (!formData.crewLead) errors.crewLead = "Please enter assigned crew lead.";
+      if (!formData.status) errors.status = "Please select operational status.";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setGeneralError("MISSING FIELDS. FAILED TO PROCESS DATA.");
+      return; 
     }
 
     setIsLoading(true);
-    const result = await saveEntity(activeTab, formData, editingId);
-    if (result.success) {
-      alert("Data successfully synchronized with Neon Database!");
-      setFormData({});
-      setEditingId(null);
-      fetchNeonData();
-      setViewMode("table");
-    } else {
-      alert("Error: Failed to save data to Neon database.");
+    try {
+      const result = await saveEntity(activeTab, formData, editingId) as { success: boolean; message?: string };
+      
+      if (result.success) {
+        alert("Data successfully synchronized with Neon Database!");
+        setFormData({});
+        setEditingId(null);
+        fetchNeonData();
+        setViewMode("table");
+      } else {
+        alert(`Error: ${result.message || "Failed to save data to Neon database."}`);
+      }
+    } catch (error) {
+      console.error("Gagal memproses pendaftaran/pembaruan data:", error);
+      alert("Terjadi gangguan jaringan siber ke server. Silakan coba lagi.");
+    } finally {
       setIsLoading(false);
     }
+  };
+
+  // Helper Functions untuk UI Error
+  const updateField = (field: string, value: any) => {
+    setFormData({ ...formData, [field]: value });
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: "" }));
+    }
+  };
+
+  const clearError = (field: string) => {
+    if (formErrors[field]) setFormErrors(prev => ({ ...prev, [field]: "" }));
+  };
+
+  const getInputClass = (fieldId: string) => {
+    return `w-full bg-transparent border-b pb-3 text-[18px] text-white outline-none transition-colors ${formErrors[fieldId] ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-white/20 focus:border-[#B026FF]"}`;
+  };
+
+  const getSelectClass = (fieldId: string) => {
+    return `w-full bg-[#1a1b22] border rounded py-3.5 px-5 text-[16px] appearance-none outline-none cursor-pointer transition-colors ${formErrors[fieldId] ? "border-[#FF3B30] text-[#FF3B30] focus:ring-1 focus:ring-[#FF3B30]" : "border-transparent text-white/80 focus:ring-1 focus:ring-[#B026FF]"}`;
+  };
+
+  const FieldError = ({ error }: { error?: string }) => {
+    if (!error) return null;
+    return <p className="text-[#FF3B30] text-[11px] font-mono mt-2 flex items-center gap-1.5"><AlertCircle size={12}/> {error}</p>;
   };
 
   const getTitle = () => {
@@ -163,15 +262,9 @@ function AdminControlContent() {
 
   const getStatusBadgeStyle = (status: string) => {
     const s = status ? status.toUpperCase() : "PENDING";
-    if (s === "DELIVERED" || s === "ARRIVED") {
-      return "bg-[#34C759]/10 text-[#34C759] border-[#34C759]/20 shadow-[0_0_10px_rgba(52,199,89,0.1)]";
-    }
-    if (s === "DELAYED" || s === "NOT DEPARTED YET") {
-      return "bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/20 shadow-[0_0_10px_rgba(255,59,48,0.1)]";
-    }
-    if (s === "EN ROUTE") {
-      return "bg-[#00E3FD]/10 text-[#00E3FD] border-[#00E3FD]/20 shadow-[0_0_10px_rgba(0,227,253,0.1)]";
-    }
+    if (s === "DELIVERED" || s === "ARRIVED") return "bg-[#34C759]/10 text-[#34C759] border-[#34C759]/20 shadow-[0_0_10px_rgba(52,199,89,0.1)]";
+    if (s === "DELAYED" || s === "NOT DEPARTED YET") return "bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/20 shadow-[0_0_10px_rgba(255,59,48,0.1)]";
+    if (s === "EN ROUTE") return "bg-[#00E3FD]/10 text-[#00E3FD] border-[#00E3FD]/20 shadow-[0_0_10px_rgba(0,227,253,0.1)]";
     return "bg-[#FFCC00]/10 text-[#FFCC00] border-[#FFCC00]/20 shadow-[0_0_10px_rgba(255,204,0,0.1)]";
   };
 
@@ -429,7 +522,7 @@ function AdminControlContent() {
               key="form-view" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }} transition={{ duration: 0.3 }}
               className="max-w-[1000px] w-full"
             >
-              <form onSubmit={handleSave} className="w-full">
+              <form onSubmit={handleSave} className="w-full" noValidate>
                 {activeTab === "fleet" && (
                   <div className="flex flex-col gap-10">
                     <div className="mb-2">
@@ -438,18 +531,19 @@ function AdminControlContent() {
                       </h2>
                       <div className="flex gap-6 items-end">
                         <div className="flex-1">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">TRACKING CODE</label>
-                          <input type="text" readOnly value={formData.code || ""} className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF] transition-colors" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.code ? "text-[#FF3B30]" : "text-white/40"}`}>TRACKING CODE</label>
+                          <input type="text" readOnly value={formData.code || ""} className={getInputClass("code")} />
+                          <FieldError error={formErrors.code} />
                         </div>
                         {!editingId && (
-                          <button type="button" onClick={() => generateCode('MJF-RND')} className="px-6 py-3 border border border-white/10 rounded text-white/60 text-[12px] font-bold tracking-[2px] uppercase hover:text-white hover:border-white/50 transition-colors flex items-center gap-2">
+                          <button type="button" onClick={() => generateCode('MJF-RND')} className="px-6 py-3 border border-white/10 rounded text-white/60 text-[12px] font-bold tracking-[2px] uppercase hover:text-white hover:border-white/50 flex items-center gap-2 mb-1">
                             <RefreshCw size={16} /> GENERATE NEW
                           </button>
                         )}
                         <div className="flex-1">
                           <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">STATUS</label>
                           <div className="relative">
-                            <select value={formData.status || "PENDING"} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full bg-[#1a1b22] border-none rounded py-3 px-5 text-[16px] text-white/80 appearance-none outline-none focus:ring-1 focus:ring-[#B026FF]">
+                            <select value={formData.status || "PENDING"} onChange={e => updateField("status", e.target.value)} className={getSelectClass("status")}>
                               <option value="PENDING">PENDING</option>
                               <option value="EN ROUTE">EN ROUTE</option>
                               <option value="DELAYED">DELAYED</option>
@@ -468,31 +562,18 @@ function AdminControlContent() {
                       </h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">ASSIGNED VESSEL</label>
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.vesselId ? "text-[#FF3B30]" : "text-white/40"}`}>ASSIGNED VESSEL</label>
                           <div className="relative">
                             <select
                               value={formData.vesselId || ""}
                               onChange={e => {
                                 const vId = e.target.value;
                                 const selectedV = vessels.find(v => String(v.id) === vId);
-
-                                // ✅ FIX: Cari crew yang namanya cocok dengan crewLead vessel (case-insensitive)
-                                // Ini mencegah auto-select ke crew yang salah akibat perbedaan kapitalisasi
-                                const matchedCrew = selectedV?.crewLead
-                                  ? crews.find(
-                                      c => c.name?.trim().toLowerCase() === selectedV.crewLead?.trim().toLowerCase()
-                                    )
-                                  : null;
-
-                                setFormData({
-                                  ...formData,
-                                  vesselId: vId,
-                                  // Jika ada crew yang cocok gunakan namanya, jika tidak kosongkan agar user pilih manual
-                                  captain: matchedCrew ? matchedCrew.name : ""
-                                });
+                                const matchedCrew = selectedV?.crewLead ? crews.find(c => c.name?.trim().toLowerCase() === selectedV.crewLead?.trim().toLowerCase()) : null;
+                                setFormData({ ...formData, vesselId: vId, captain: matchedCrew ? matchedCrew.name : "" });
+                                clearError("vesselId"); clearError("captain");
                               }}
-                              required
-                              className="w-full bg-[#1a1b22] border-none rounded py-3.5 px-5 text-[16px] text-white/80 appearance-none outline-none focus:ring-1 focus:ring-[#B026FF] cursor-pointer"
+                              className={getSelectClass("vesselId")}
                             >
                               <option value="" disabled hidden>Select operational vessel...</option>
                               {vessels.map(v => (
@@ -501,16 +582,16 @@ function AdminControlContent() {
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                           </div>
+                          <FieldError error={formErrors.vesselId} />
                         </div>
 
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">ASSIGNED CAPTAIN / CREW LEAD</label>
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.captain ? "text-[#FF3B30]" : "text-white/40"}`}>ASSIGNED CAPTAIN / CREW LEAD</label>
                           <div className="relative">
                             <select
                               value={formData.captain || ""}
-                              onChange={e => setFormData({...formData, captain: e.target.value})}
-                              required
-                              className="w-full bg-[#1a1b22] border-none rounded py-3.5 px-5 text-[16px] text-white/80 appearance-none outline-none focus:ring-1 focus:ring-[#B026FF] cursor-pointer"
+                              onChange={e => updateField("captain", e.target.value)}
+                              className={getSelectClass("captain")}
                             >
                               <option value="" disabled hidden>Select captain on board...</option>
                               {crews.map(c => (
@@ -519,6 +600,7 @@ function AdminControlContent() {
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                           </div>
+                          <FieldError error={formErrors.captain} />
                         </div>
                       </div>
                     </div>
@@ -529,28 +611,34 @@ function AdminControlContent() {
                       </h2>
                       <div className="grid grid-cols-2 gap-x-8 gap-y-8">
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">NAME</label>
-                          <input type="text" value={formData.senderName || ""} onChange={e => setFormData({...formData, senderName: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.senderName ? "text-[#FF3B30]" : "text-white/40"}`}>NAME</label>
+                          <input type="text" value={formData.senderName || ""} onChange={e => updateField("senderName", e.target.value)} className={getInputClass("senderName")} />
+                          <FieldError error={formErrors.senderName} />
                         </div>
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">CONTACT</label>
-                          <input type="text" value={formData.senderContact || ""} onChange={e => setFormData({...formData, senderContact: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.senderContact ? "text-[#FF3B30]" : "text-white/40"}`}>CONTACT</label>
+                          <input type="text" value={formData.senderContact || ""} onChange={e => updateField("senderContact", e.target.value)} className={getInputClass("senderContact")} />
+                          <FieldError error={formErrors.senderContact} />
                         </div>
                         <div className="col-span-2">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">EMAIL ADDRESS</label>
-                          <input type="email" value={formData.senderEmail || ""} onChange={e => setFormData({...formData, senderEmail: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.senderEmail ? "text-[#FF3B30]" : "text-white/40"}`}>EMAIL ADDRESS</label>
+                          <input type="email" value={formData.senderEmail || ""} onChange={e => updateField("senderEmail", e.target.value)} className={getInputClass("senderEmail")} />
+                          <FieldError error={formErrors.senderEmail} />
                         </div>
                         <div className="col-span-2">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">ORIGIN ADDRESS</label>
-                          <input type="text" value={formData.senderAddress || ""} onChange={e => setFormData({...formData, senderAddress: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.senderAddress ? "text-[#FF3B30]" : "text-white/40"}`}>ORIGIN ADDRESS</label>
+                          <input type="text" value={formData.senderAddress || ""} onChange={e => updateField("senderAddress", e.target.value)} className={getInputClass("senderAddress")} />
+                          <FieldError error={formErrors.senderAddress} />
                         </div>
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">COUNTRY</label>
-                          <input type="text" value={formData.senderCountry || ""} onChange={e => setFormData({...formData, senderCountry: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.senderCountry ? "text-[#FF3B30]" : "text-white/40"}`}>COUNTRY</label>
+                          <input type="text" value={formData.senderCountry || ""} onChange={e => updateField("senderCountry", e.target.value)} className={getInputClass("senderCountry")} />
+                          <FieldError error={formErrors.senderCountry} />
                         </div>
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">PROVINCE / CITY</label>
-                          <input type="text" value={formData.senderCity || ""} onChange={e => setFormData({...formData, senderCity: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.senderCity ? "text-[#FF3B30]" : "text-white/40"}`}>PROVINCE / CITY</label>
+                          <input type="text" value={formData.senderCity || ""} onChange={e => updateField("senderCity", e.target.value)} className={getInputClass("senderCity")} />
+                          <FieldError error={formErrors.senderCity} />
                         </div>
                       </div>
                     </div>
@@ -561,28 +649,34 @@ function AdminControlContent() {
                       </h2>
                       <div className="grid grid-cols-2 gap-x-8 gap-y-8">
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">NAME</label>
-                          <input type="text" value={formData.recipientName || ""} onChange={e => setFormData({...formData, recipientName: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.recipientName ? "text-[#FF3B30]" : "text-white/40"}`}>NAME</label>
+                          <input type="text" value={formData.recipientName || ""} onChange={e => updateField("recipientName", e.target.value)} className={getInputClass("recipientName")} />
+                          <FieldError error={formErrors.recipientName} />
                         </div>
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">CONTACT</label>
-                          <input type="text" value={formData.recipientContact || ""} onChange={e => setFormData({...formData, recipientContact: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.recipientContact ? "text-[#FF3B30]" : "text-white/40"}`}>CONTACT</label>
+                          <input type="text" value={formData.recipientContact || ""} onChange={e => updateField("recipientContact", e.target.value)} className={getInputClass("recipientContact")} />
+                          <FieldError error={formErrors.recipientContact} />
                         </div>
                         <div className="col-span-2">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">EMAIL ADDRESS</label>
-                          <input type="email" value={formData.recipientEmail || ""} onChange={e => setFormData({...formData, recipientEmail: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.recipientEmail ? "text-[#FF3B30]" : "text-white/40"}`}>EMAIL ADDRESS</label>
+                          <input type="email" value={formData.recipientEmail || ""} onChange={e => updateField("recipientEmail", e.target.value)} className={getInputClass("recipientEmail")} />
+                          <FieldError error={formErrors.recipientEmail} />
                         </div>
                         <div className="col-span-2">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">DESTINATION ADDRESS</label>
-                          <input type="text" value={formData.recipientAddress || ""} onChange={e => setFormData({...formData, recipientAddress: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.recipientAddress ? "text-[#FF3B30]" : "text-white/40"}`}>DESTINATION ADDRESS</label>
+                          <input type="text" value={formData.recipientAddress || ""} onChange={e => updateField("recipientAddress", e.target.value)} className={getInputClass("recipientAddress")} />
+                          <FieldError error={formErrors.recipientAddress} />
                         </div>
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">COUNTRY</label>
-                          <input type="text" value={formData.recipientCountry || ""} onChange={e => setFormData({...formData, recipientCountry: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.recipientCountry ? "text-[#FF3B30]" : "text-white/40"}`}>COUNTRY</label>
+                          <input type="text" value={formData.recipientCountry || ""} onChange={e => updateField("recipientCountry", e.target.value)} className={getInputClass("recipientCountry")} />
+                          <FieldError error={formErrors.recipientCountry} />
                         </div>
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">PROVINCE / CITY</label>
-                          <input type="text" value={formData.recipientCity || ""} onChange={e => setFormData({...formData, recipientCity: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.recipientCity ? "text-[#FF3B30]" : "text-white/40"}`}>PROVINCE / CITY</label>
+                          <input type="text" value={formData.recipientCity || ""} onChange={e => updateField("recipientCity", e.target.value)} className={getInputClass("recipientCity")} />
+                          <FieldError error={formErrors.recipientCity} />
                         </div>
                       </div>
                     </div>
@@ -593,32 +687,30 @@ function AdminControlContent() {
                       </h2>
                       <div className="flex flex-col gap-8">
                         <div className="w-full">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">ITEM DESCRIPTION</label>
-                          <input type="text" value={formData.cargoDesc || ""} onChange={e => setFormData({...formData, cargoDesc: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.cargoDesc ? "text-[#FF3B30]" : "text-white/40"}`}>ITEM DESCRIPTION</label>
+                          <input type="text" value={formData.cargoDesc || ""} onChange={e => updateField("cargoDesc", e.target.value)} className={getInputClass("cargoDesc")} placeholder="What are you shipping?" />
+                          <FieldError error={formErrors.cargoDesc} />
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-end">
-                          <div className="flex gap-2 items-end relative border-b border-[#B026FF]">
-                            <div className="flex-1">
-                              <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">WEIGHT</label>
-                              <input type="number" value={formData.weight || ""} onChange={e => setFormData({...formData, weight: e.target.value})} required className="w-full bg-transparent border-none pb-3 text-[18px] text-white outline-none" />
-                            </div>
-                            <div className="relative mb-2">
-                              <select value={formData.weightUnit || "KG"} onChange={e => setFormData({...formData, weightUnit: e.target.value})} className="bg-[#1a1b22] border-none rounded py-1 px-3 text-xs font-bold text-[#E5B5FF] appearance-none outline-none pr-7 cursor-pointer">
-                                <option value="KG">KG</option>
-                                <option value="TON">TON</option>
-                                <option value="LBS">LBS</option>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 items-start">
+                          <div className="flex flex-col gap-2">
+                            <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-1 block font-mono ${formErrors.weight ? "text-[#FF3B30]" : "text-white/40"}`}>TOTAL WEIGHT</label>
+                            <div className={`flex gap-2 items-center relative border-b transition-colors ${formErrors.weight ? 'border-[#FF3B30]' : 'border-white/20 focus-within:border-[#B026FF]'}`}>
+                              <input type="number" value={formData.weight || ""} onChange={e => updateField("weight", e.target.value)} className="w-full bg-transparent border-none pb-3 text-[18px] text-white outline-none" placeholder="0.0" />
+                              <select value={formData.weightUnit || "KG"} onChange={e => updateField("weightUnit", e.target.value)} className="bg-[#1a1b22] border-none rounded py-1 px-3 mb-2 text-xs font-bold text-[#E5B5FF] appearance-none outline-none pr-7 cursor-pointer">
+                                <option value="KG">KG</option><option value="TON">TON</option><option value="LBS">LBS</option>
                               </select>
-                              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#E5B5FF]/50"><ChevronDown size={12} /></div>
                             </div>
+                            <FieldError error={formErrors.weight} />
                           </div>
-                          <div>
-                            <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">DIMENSIONS (CBM)</label>
-                            <input type="number" value={formData.dimensions || ""} onChange={e => setFormData({...formData, dimensions: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <div className="flex flex-col gap-2">
+                            <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-1 block font-mono ${formErrors.dimensions ? "text-[#FF3B30]" : "text-white/40"}`}>DIMENSIONS (CBM)</label>
+                            <input type="number" value={formData.dimensions || ""} onChange={e => updateField("dimensions", e.target.value)} className={getInputClass("dimensions")} />
+                            <FieldError error={formErrors.dimensions} />
                           </div>
-                          <div>
-                            <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">CATEGORY</label>
+                          <div className="flex flex-col gap-2">
+                            <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-1 block font-mono ${formErrors.category ? "text-[#FF3B30]" : "text-white/40"}`}>CATEGORY</label>
                             <div className="relative">
-                              <select value={formData.category || ""} onChange={e => setFormData({...formData, category: e.target.value})} required className="w-full bg-[#1a1b22] border-none rounded py-3.5 px-5 text-[16px] text-white/80 appearance-none outline-none focus:ring-1 focus:ring-[#B026FF]">
+                              <select value={formData.category || ""} onChange={e => updateField("category", e.target.value)} className={getSelectClass("category")}>
                                 <option value=" " disabled hidden>Select category...</option>
                                 <option value="electronics">Electronics</option>
                                 <option value="clothing">Clothing</option>
@@ -627,15 +719,15 @@ function AdminControlContent() {
                               </select>
                               <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                             </div>
+                            <FieldError error={formErrors.category} />
                           </div>
-                          <div>
-                            <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">PACKAGE TYPE (SERVICE)</label>
+                          <div className="flex flex-col gap-2">
+                            <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-1 block font-mono ${formErrors.packageTypeId ? "text-[#FF3B30]" : "text-white/40"}`}>SERVICE PLAN</label>
                             <div className="relative">
                               <select 
                                 value={formData.packageTypeId || "2"} 
-                                onChange={e => setFormData({...formData, packageTypeId: e.target.value})} 
-                                required 
-                                className="w-full bg-[#1a1b22] border-none rounded py-3.5 px-5 text-[16px] text-white/80 appearance-none outline-none focus:ring-1 focus:ring-[#B026FF]"
+                                onChange={e => updateField("packageTypeId", e.target.value)} 
+                                className={getSelectClass("packageTypeId")}
                               >
                                 <option value="1">MAJU ECONOMY</option>
                                 <option value="2">MAJU STANDARD</option>
@@ -645,6 +737,7 @@ function AdminControlContent() {
                               </select>
                               <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                             </div>
+                            <FieldError error={formErrors.packageTypeId} />
                           </div>
                         </div>
                       </div>
@@ -660,11 +753,12 @@ function AdminControlContent() {
                       </h2>
                       <div className="flex gap-6 items-end">
                         <div className="flex-1">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">CREW ID</label>
-                          <input type="text" readOnly value={formData.code || ""} className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.code ? "text-[#FF3B30]" : "text-white/40"}`}>CREW ID</label>
+                          <input type="text" readOnly value={formData.code || ""} className={getInputClass("code")} />
+                          <FieldError error={formErrors.code} />
                         </div>
                         {!editingId && (
-                          <button type="button" onClick={() => generateCode('CRW')} className="px-6 py-3 border border-white/10 rounded text-white/60 text-[12px] font-bold tracking-[2px] uppercase hover:text-white hover:border-white/50 transition-colors flex items-center gap-2">
+                          <button type="button" onClick={() => generateCode('CRW')} className="px-6 py-3 border border-white/10 rounded text-white/60 text-[12px] font-bold tracking-[2px] uppercase hover:text-white hover:border-white/50 flex items-center gap-2 mb-1">
                             <RefreshCw size={16} /> GENERATE ID
                           </button>
                         )}
@@ -676,27 +770,31 @@ function AdminControlContent() {
                       </h2>
                       <div className="grid grid-cols-2 gap-x-8 gap-y-8">
                         <div className="col-span-2">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">FULL NAME</label>
-                          <input type="text" value={formData.name || ""} onChange={e => setFormData({...formData, name: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.name ? "text-[#FF3B30]" : "text-white/40"}`}>FULL NAME</label>
+                          <input type="text" value={formData.name || ""} onChange={e => updateField("name", e.target.value)} className={getInputClass("name")} />
+                          <FieldError error={formErrors.name} />
                         </div>
                         <div className="col-span-2">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">EMAIL ADDRESS</label>
-                          <input type="email" value={formData.email || ""} onChange={e => setFormData({...formData, email: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.email ? "text-[#FF3B30]" : "text-white/40"}`}>EMAIL ADDRESS</label>
+                          <input type="email" value={formData.email || ""} onChange={e => updateField("email", e.target.value)} className={getInputClass("email")} />
+                          <FieldError error={formErrors.email} />
                         </div>
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">GENDER</label>
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.gender ? "text-[#FF3B30]" : "text-white/40"}`}>GENDER</label>
                           <div className="relative">
-                            <select value={formData.gender || ""} onChange={e => setFormData({...formData, gender: e.target.value})} required className="w-full bg-[#1a1b22] border-none rounded py-3 px-5 text-[16px] text-white/80 appearance-none outline-none focus:ring-1 focus:ring-[#B026FF]">
+                            <select value={formData.gender || ""} onChange={e => updateField("gender", e.target.value)} className={getSelectClass("gender")}>
                               <option value="" disabled hidden>Select gender...</option>
                               <option value="male">Male</option>
                               <option value="female">Female</option>
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                           </div>
+                          <FieldError error={formErrors.gender} />
                         </div>
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">AGE</label>
-                          <input type="number" value={formData.age || ""} onChange={e => setFormData({...formData, age: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.age ? "text-[#FF3B30]" : "text-white/40"}`}>AGE</label>
+                          <input type="number" value={formData.age || ""} onChange={e => updateField("age", e.target.value)} className={getInputClass("age")} />
+                          <FieldError error={formErrors.age} />
                         </div>
                       </div>
                     </div>
@@ -706,9 +804,9 @@ function AdminControlContent() {
                       </h2>
                       <div className="grid grid-cols-2 gap-x-8 gap-y-8">
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">SPECIALIST ROLE</label>
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.role ? "text-[#FF3B30]" : "text-white/40"}`}>SPECIALIST ROLE</label>
                           <div className="relative">
-                            <select value={formData.role || ""} onChange={e => setFormData({...formData, role: e.target.value})} required className="w-full bg-[#1a1b22] border-none rounded py-3 px-5 text-[16px] text-white/80 appearance-none outline-none focus:ring-1 focus:ring-[#B026FF]">
+                            <select value={formData.role || ""} onChange={e => updateField("role", e.target.value)} className={getSelectClass("role")}>
                               <option value="" disabled hidden>Select role...</option>
                               <option value="captain">Captain</option>
                               <option value="navigator">Navigator</option>
@@ -717,14 +815,17 @@ function AdminControlContent() {
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                           </div>
+                          <FieldError error={formErrors.role} />
                         </div>
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">ORIGIN CITY / COUNTRY</label>
-                          <input type="text" value={formData.origin || ""} onChange={e => setFormData({...formData, origin: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.origin ? "text-[#FF3B30]" : "text-white/40"}`}>ORIGIN CITY / COUNTRY</label>
+                          <input type="text" value={formData.origin || ""} onChange={e => updateField("origin", e.target.value)} className={getInputClass("origin")} />
+                          <FieldError error={formErrors.origin} />
                         </div>
                         <div className="col-span-2">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">CONTACT NUMBER</label>
-                          <input type="text" value={formData.contact || ""} onChange={e => setFormData({...formData, contact: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.contact ? "text-[#FF3B30]" : "text-white/40"}`}>CONTACT NUMBER</label>
+                          <input type="text" value={formData.contact || ""} onChange={e => updateField("contact", e.target.value)} className={getInputClass("contact")} />
+                          <FieldError error={formErrors.contact} />
                         </div>
                       </div>
                     </div>
@@ -739,51 +840,61 @@ function AdminControlContent() {
                       </h2>
                       <div className="grid grid-cols-2 gap-x-8 gap-y-8">
                         <div className="col-span-2">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">VESSEL NAME</label>
-                          <input type="text" value={formData.name || ""} onChange={e => setFormData({...formData, name: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.name ? "text-[#FF3B30]" : "text-white/40"}`}>VESSEL NAME</label>
+                          <input type="text" value={formData.name || ""} onChange={e => updateField("name", e.target.value)} className={getInputClass("name")} />
+                          <FieldError error={formErrors.name} />
                         </div>
-                        <div className="flex gap-2 items-end relative border-b border-white/20 focus-within:border-[#B026FF] transition-colors">
-                          <div className="flex-1">
-                            <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">CAPACITY</label>
-                            <input type="number" value={formData.capacity || ""} onChange={e => setFormData({...formData, capacity: e.target.value})} required className="w-full bg-transparent border-none pb-3 text-[18px] text-white outline-none" />
-                          </div>
-                          <div className="relative mb-2">
-                            <select value={formData.capacityUnit || "TONNES"} onChange={e => setFormData({...formData, capacityUnit: e.target.value})} className="bg-[#1a1b22] border-none rounded py-1 px-3 text-xs font-bold text-[#E5B5FF] appearance-none outline-none pr-7 cursor-pointer">
+                        <div className="flex flex-col gap-2">
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-1 block font-mono ${formErrors.capacity ? "text-[#FF3B30]" : "text-white/40"}`}>CAPACITY</label>
+                          <div className={`flex gap-2 items-center relative border-b transition-colors ${formErrors.capacity ? 'border-[#FF3B30]' : 'border-white/20 focus-within:border-[#B026FF]'}`}>
+                            <input type="number" value={formData.capacity || ""} onChange={e => updateField("capacity", e.target.value)} className="w-full bg-transparent border-none pb-3 text-[18px] text-white outline-none" />
+                            <select value={formData.capacityUnit || "TONNES"} onChange={e => updateField("capacityUnit", e.target.value)} className="bg-[#1a1b22] border-none rounded py-1 px-3 mb-2 text-xs font-bold text-[#E5B5FF] appearance-none outline-none pr-7 cursor-pointer">
                               <option value="TONNES">TONNES</option>
                               <option value="KG">KG</option>
                               <option value="CBM">CBM</option>
                             </select>
-                            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#E5B5FF]/50"><ChevronDown size={12} /></div>
                           </div>
+                          <FieldError error={formErrors.capacity} />
                         </div>
-                        <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">VESSEL TYPE</label>
-                          <input type="text" value={formData.type || ""} onChange={e => setFormData({...formData, type: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                        <div className="flex flex-col gap-2">
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-1 block font-mono ${formErrors.type ? "text-[#FF3B30]" : "text-white/40"}`}>VESSEL TYPE</label>
+                          <input type="text" value={formData.type || ""} onChange={e => updateField("type", e.target.value)} className={getInputClass("type")} />
+                          <FieldError error={formErrors.type} />
                         </div>
                         <div className="col-span-2">
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">ASSIGNED CREW LEAD</label>
-                          <input type="text" value={formData.crewLead || ""} onChange={e => setFormData({...formData, crewLead: e.target.value})} required className="w-full bg-transparent border-b border-white/20 pb-3 text-[18px] text-white outline-none focus:border-[#B026FF]" />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.crewLead ? "text-[#FF3B30]" : "text-white/40"}`}>ASSIGNED CREW LEAD</label>
+                          <input type="text" value={formData.crewLead || ""} onChange={e => updateField("crewLead", e.target.value)} className={getInputClass("crewLead")} />
+                          <FieldError error={formErrors.crewLead} />
                         </div>
                         <div>
-                          <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">OPERATIONAL STATUS</label>
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.status ? "text-[#FF3B30]" : "text-white/40"}`}>OPERATIONAL STATUS</label>
                           <div className="relative">
-                            <select value={formData.status || "Active"} onChange={e => setFormData({...formData, status: e.target.value})} className="w-full bg-[#1a1b22] border-none rounded py-3 px-5 text-[16px] text-white/80 appearance-none outline-none focus:ring-1 focus:ring-[#B026FF]">
+                            <select value={formData.status || "Active"} onChange={e => updateField("status", e.target.value)} className={getSelectClass("status")}>
                               <option value="Active">Active</option>
                               <option value="Maintenance">Maintenance</option>
                               <option value="Docked">Docked</option>
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                           </div>
+                          <FieldError error={formErrors.status} />
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
 
-                <div className="mt-14 flex gap-4">
+                {/* Banner Error Umum di bawah Form */}
+                {generalError && (
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mt-14 w-full bg-[#FF3B30]/5 border border-[#FF3B30]/20 p-5 rounded-lg flex items-center gap-3">
+                    <AlertCircle size={20} className="text-[#FF3B30]" />
+                    <p className="text-[#FF3B30] text-xs font-mono font-bold uppercase tracking-[2px]">{generalError}</p>
+                  </motion.div>
+                )}
+
+                <div className={`${generalError ? 'mt-6' : 'mt-14'} flex gap-4`}>
                   <button type="button" onClick={() => setViewMode("table")} className="px-6 py-4 rounded-md font-bold text-white/50 border border-white/10 hover:bg-white/5 uppercase tracking-widest w-1/3 transition-colors">CANCEL</button>
-                  <button type="submit" className="flex-1 py-4 rounded-md font-grotesk font-bold text-[16px] text-white tracking-[3px] uppercase bg-gradient-to-r from-[#B026FF] to-[#a2d2ff] hover:opacity-90 transition-opacity shadow-[0_0_20px_rgba(176,38,255,0.2)]">
-                    {editingId ? "SAVE CHANGES" : "SUBMIT DATA"}
+                  <button type="submit" disabled={isLoading} className="flex-1 py-4 rounded-md font-grotesk font-bold text-[16px] text-white tracking-[3px] uppercase bg-gradient-to-r from-[#B026FF] to-[#a2d2ff] hover:opacity-90 transition-opacity shadow-[0_0_20px_rgba(176,38,255,0.2)] disabled:opacity-50">
+                    {isLoading ? "PROCESSING..." : (editingId ? "SAVE CHANGES" : "SUBMIT REQUEST")}
                   </button>
                 </div>
               </form>
