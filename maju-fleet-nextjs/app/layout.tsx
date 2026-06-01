@@ -3,8 +3,12 @@ import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
+// REVISI METADATA AGAR MENDUKUNG TEMPLATE OTOMATIS
 export const metadata: Metadata = {
-  title: "Maju Fleet — Maritime Logistics",
+  title: {
+    default: "Maju Fleet — Maritime Logistics", // Judul bawaan jika halaman lain tidak punya metadata
+    template: "%s | Maju Fleet"               // Pola gabungan otomatis (cth: Booking | Maju Fleet)
+  },
   description: "Intelligent maritime logistics powered by real-time telemetry, AI-driven insights, and global satellite connectivity.",
 };
 

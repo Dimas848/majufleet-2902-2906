@@ -111,7 +111,7 @@ export default function Navbar() {
         // 🔄 MENGUBAH RESPON BAHASA INDONESIA KE BAHASA INGGRIS UNTUK DOSEN
         let rawMessage = res?.message || "INVALID USERNAME OR PASSWORD.";
         if (rawMessage.includes("tidak ditemukan") || rawMessage.includes("bukan akun Customer")) {
-          rawMessage = "EMAIL NOT FOUND OR INVALID CUSTOMER ACCOUNT ROLE.";
+          rawMessage = "EMAIL NOT FOUND OR INVALID CUSTOMER ACCOUNT.";
         } else if (rawMessage.includes("salah") || rawMessage.includes("Password yang Anda masukkan salah")) {
           rawMessage = "INCORRECT PASSWORD. PLEASE TRY AGAIN.";
         }
@@ -160,7 +160,7 @@ export default function Navbar() {
         setLoading(false);
       }
     } catch (err) {
-      setErrorMsg("CONNECTION FAULT TO NEON SERVER.");
+      setErrorMsg("CONNECTION FAULT TO DATABASE SERVER.");
       setLoading(false);
     }
   };
@@ -181,11 +181,11 @@ export default function Navbar() {
         resetFormStates();
         router.push("/Dashboard-Admin/fleet");
       } else {
-        setErrorMsg(res?.message || "ACCESS DENIED: CLEARANCE INVALID.");
+        setErrorMsg(res?.message || "ACCESS DENIED: CREDENTIAL INVALID.");
         setLoading(false);
       }
     } catch (err) {
-      setErrorMsg("CONNECTION FAULT TO NEON SERVER.");
+      setErrorMsg("CONNECTION FAULT TO DATABASE SERVER.");
       setLoading(false);
     }
   };
@@ -453,10 +453,10 @@ export default function Navbar() {
 
                 <form onSubmit={handleAdminSubmit} className="flex flex-col gap-5">
                   <div>
-                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block">Commander ID</label>
+                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block">USERNAME / EMAIL</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><User size={16} /></div>
-                      <input type="text" required value={adminId} onChange={(e) => setAdminId(e.target.value)} placeholder="Authorized ID / Email..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
+                      <input type="text" required value={adminId} onChange={(e) => setAdminId(e.target.value)} placeholder="Authorized Username / Email..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
                     </div>
                     {/* STATIS TANPA kedap-kedip */}
                     {errorMsg && (
@@ -466,10 +466,10 @@ export default function Navbar() {
                     )}
                   </div>
                   <div>
-                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block">Master Key</label>
+                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block">PASSWORD</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Lock size={16} /></div>
-                      <input type={showAdminPassword ? "text" : "password"} required value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="Input clearance code..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
+                      <input type={showAdminPassword ? "text" : "password"} required value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="Password Code..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
                       <button type="button" onClick={() => setShowAdminPassword(!showAdminPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
                         {showAdminPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
@@ -482,7 +482,7 @@ export default function Navbar() {
                     )}
                   </div>
                   <button type="submit" disabled={loading} className="w-full mt-3 py-3.5 rounded border border-[#B026FF]/50 bg-[#121317] hover:bg-[#B026FF]/10 hover:border-[#B026FF] text-white font-grotesk font-bold text-[13px] uppercase tracking-[2px] transition-all duration-300 disabled:opacity-50">
-                    {loading ? "Authenticating..." : "EXECUTE OVERRIDE"}
+                    {loading ? "Authenticating..." : "LOGIN"}
                   </button>
                 </form>
               </motion.div>

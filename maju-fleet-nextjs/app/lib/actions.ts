@@ -82,15 +82,15 @@ export async function loginAdmin(commanderId: string, masterKey: string) {
     });
 
     if (!adminUser) {
-      return { success: false, message: "ACCESS DENIED: COMMANDER ID NOT FOUND IN DATABASE." };
+      return { success: false, message: "ACCESS DENIED: USERNAME OR PASSWORD NOT FOUND IN DATABASE." };
     }
 
     if (adminUser.password !== masterKey) {
-      return { success: false, message: "ACCESS DENIED: INVALID MASTER KEY CLEARANCE." };
+      return { success: false, message: "ACCESS DENIED: USERNAME OR PASSWORD NOT FOUND IN DATABASE" };
     }
 
     if (adminUser.role !== "administrator" && adminUser.role !== "captain") {
-      return { success: false, message: "ACCESS DENIED: INSUFFICIENT CLEARANCE LEVEL." };
+      return { success: false, message: "ACCESS DENIED: ROLE NOT AUTHORIZED." };
     }
 
     const cookieStore = await cookies();
@@ -100,7 +100,7 @@ export async function loginAdmin(commanderId: string, masterKey: string) {
     return { success: true, message: "ACCESS AUTHORIZED." };
   } catch (error) {
     console.error("Admin Auth Error:", error);
-    return { success: false, message: "CRITICAL SERVER ERROR DURING CLEARANCE CHECK." };
+    return { success: false, message: "USERNAME / PASSWORD INVALID." };
   }
 }
 
