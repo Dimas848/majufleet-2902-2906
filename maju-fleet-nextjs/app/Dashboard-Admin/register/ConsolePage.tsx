@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from "react";
 import { 
   Hash, Users, MapPin, Package, RefreshCw, Briefcase, ChevronDown, 
   Search, Plus, Edit, Trash2, CheckCircle, Mail, Phone, Ship, Filter,
-  AlertCircle
+  AlertCircle, X, Trash
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation";
@@ -34,9 +34,30 @@ function AdminControlContent() {
 
   const [formData, setFormData] = useState<any>({});
   
-  // State untuk custom error handling UI
+  // State untuk custom error handling UI internal form
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [generalError, setGeneralError] = useState<string | null>(null);
+
+  // State untuk Custom Toast Notification System
+  const [toast, setToast] = useState<{ type: "success" | "error"; title: string; message: string } | null>(null);
+
+  // State untuk Custom Confirmation Delete Modal
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; targetId: number | null }>({
+    isOpen: false,
+    targetId: null
+  });
+
+  // Efek auto-dismiss untuk toast notification (menghilang otomatis dalam 4 detik)
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const showNotification = (type: "success" | "error", title: string, message: string) => {
+    setToast({ type, title, message });
+  };
 
   useEffect(() => {
     const typeParam = searchParams.get("type") as EntityType;
@@ -73,6 +94,7 @@ function AdminControlContent() {
       if (dbData.vessels) setVessels(dbData.vessels);
     } catch (error) {
       console.error("Gagal memuat data dari database Neon:", error);
+      showNotification("error", "FETCH COMPONENT ERROR", "Failed to compile latest database records stream.");
     } finally {
       setIsLoading(false);
     }
@@ -105,28 +127,37 @@ function AdminControlContent() {
     setViewMode("form");
   };
 
-  const handleDelete = async (id: number) => {
-    const confirmDelete = window.confirm("Are you sure you want to delete this data permanently from Neon Database?");
-    if (!confirmDelete) return;
+  // Membuka konfirmasi hapus kustom
+  const openDeleteConfirmation = (id: number) => {
+    setDeleteModal({ isOpen: true, targetId: id });
+  };
 
+  // Eksekusi hapus data dari database
+  const executeDeleteData = async () => {
+    if (!deleteModal.targetId) return;
+    
+    const id = deleteModal.targetId;
+    setDeleteModal({ isOpen: false, targetId: null }); 
     setIsLoading(true);
+    
     try {
       const result = await deleteEntity(activeTab, id) as { success: boolean; message?: string };
       if (result.success) {
-        alert("Data successfully deleted from Neon database!");
+        showNotification("success", "RECORD PURGED", `Data matrix sequence has been successfully deleted from database registry.`);
         fetchNeonData(); 
         setViewMode("table");
       } else {
-        alert(`Error: ${result.message || "Failed to delete data from server."}`);
+        showNotification("error", "DELETE FAULT", result.message || "Database client rejected the deletion command token.");
       }
     } catch (error) {
       console.error("Kesalahan saat menghapus data:", error);
-      alert("Terjadi gangguan jaringan siber ke server saat menghapus data.");
+      showNotification("error", "NETWORK BREACH", "Cyberconnection timeout while sending deletion sequence.");
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Eksekusi simpan (Create & Update) data ke database
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormErrors({});
@@ -134,7 +165,7 @@ function AdminControlContent() {
 
     let errors: Record<string, string> = {};
 
-    // Custom Validation
+    // Validasi Form Komplit
     if (activeTab === "fleet") {
       if (!formData.vesselId) errors.vesselId = "Please select an operational vessel.";
       if (!formData.captain) errors.captain = "Please select a captain on board.";
@@ -188,6 +219,7 @@ function AdminControlContent() {
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       setGeneralError("MISSING FIELDS. FAILED TO PROCESS DATA.");
+      showNotification("error", "VALIDATION ERROR", "Incomplete matrix parameters. Action blocked.");
       return; 
     }
 
@@ -196,23 +228,26 @@ function AdminControlContent() {
       const result = await saveEntity(activeTab, formData, editingId) as { success: boolean; message?: string };
       
       if (result.success) {
-        alert("Data successfully synchronized with Neon Database!");
+        if (editingId) {
+          showNotification("success", "MATRIX UPDATED", `Existing data sequence successfully re-compiled and updated.`);
+        } else {
+          showNotification("success", "RECORD DEPLOYED", `New data entry has been successfully initialized and saved to database.`);
+        }
         setFormData({});
         setEditingId(null);
         fetchNeonData();
         setViewMode("table");
       } else {
-        alert(`Error: ${result.message || "Failed to save data to Neon database."}`);
+        showNotification("error", "WRITE ERROR", result.message || "Neon node rejected the stream packet commit.");
       }
     } catch (error) {
       console.error("Gagal memproses pendaftaran/pembaruan data:", error);
-      alert("Terjadi gangguan jaringan siber ke server. Silakan coba lagi.");
+      showNotification("error", "SERVER TIMEOUT", "Neon pipeline terminal failed to response.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Helper Functions untuk UI Error
   const updateField = (field: string, value: any) => {
     setFormData({ ...formData, [field]: value });
     if (formErrors[field]) {
@@ -235,6 +270,13 @@ function AdminControlContent() {
   const FieldError = ({ error }: { error?: string }) => {
     if (!error) return null;
     return <p className="text-[#FF3B30] text-[11px] font-mono mt-2 flex items-center gap-1.5"><AlertCircle size={12}/> {error}</p>;
+  };
+
+  const getSummaryCode = (tab: string, id: number) => {
+    if (tab === "fleet") return `FLT-${id}`;
+    if (tab === "crew") return `CRW-${id}`;
+    if (tab === "customer") return `CUST-${id}`;
+    return `VSL-${id}`;
   };
 
   const getTitle = () => {
@@ -312,6 +354,7 @@ function AdminControlContent() {
     );
   };
 
+  // --- SKELETON RENDER FUNCTIONS (RE-ADDED TO PREVENT COMPILER ERRORS) ---
   const renderTableSkeleton = () => (
     <div className="bg-[#121317] rounded-lg border border-white/5 overflow-hidden animate-pulse">
       <div className="p-4 border-b border-white/5 bg-[#1a1b22] flex justify-between">
@@ -341,6 +384,91 @@ function AdminControlContent() {
 
   return (
     <main className="w-full px-6 md:px-10 relative z-10 flex flex-col gap-8 max-w-[1200px] mx-auto pb-10 mt-6">
+      
+      {/* === CUSTOM TOAST NOTIFICATION COMPONENT === */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -40, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: -20, x: "-50%" }}
+            className="fixed top-24 left-1/2 z-[99999] w-full max-w-[420px] bg-[#0c0d12]/95 backdrop-blur-md border rounded-xl p-5 shadow-2xl flex items-start gap-4 overflow-hidden"
+            style={{
+              borderColor: toast.type === "success" ? "rgba(52, 199, 89, 0.3)" : "rgba(255, 59, 48, 0.3)",
+              boxShadow: toast.type === "success" ? "0 0 40px rgba(52, 199, 89, 0.2)" : "0 0 40px rgba(255, 59, 48, 0.2)"
+            }}
+          >
+            <div className={`absolute top-0 left-0 w-full h-[3px] ${toast.type === "success" ? "bg-[#34C759]" : "bg-[#FF3B30]"}`} />
+            <div className="mt-0.5 shrink-0">
+              {toast.type === "success" ? <CheckCircle size={22} className="text-[#34C759]" /> : <AlertCircle size={22} className="text-[#FF3B30]" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-mono text-[11px] font-bold tracking-[3px] uppercase mb-1" style={{ color: toast.type === "success" ? "#34C759" : "#FF3B30" }}>
+                {toast.title}
+              </h4>
+              <p className="text-white/80 font-inter text-[13px] leading-relaxed">{toast.message}</p>
+            </div>
+            <button onClick={() => setToast(null)} className="text-white/30 hover:text-white transition-colors shrink-0 p-0.5 rounded hover:bg-white/5"><X size={16} /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* === CUSTOM DESTRUCTIVE DELETE CONFIRMATION MODAL === */}
+      <AnimatePresence>
+        {deleteModal.isOpen && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center px-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              onClick={() => setDeleteModal({ isOpen: false, targetId: null })}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer" 
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 15 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.9, y: 15 }}
+              className="relative w-full max-w-[440px] bg-[#0c0d12] border border-[#FF3B30]/30 rounded-xl p-8 shadow-[0_0_50px_rgba(255,59,48,0.15)] overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-[4px] bg-[#FF3B30]" />
+              
+              <div className="flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-full bg-[#FF3B30]/10 border border-[#FF3B30]/20 flex items-center justify-center text-[#FF3B30] mb-5 shadow-[0_0_15px_rgba(255,59,48,0.1)]">
+                  <Trash size={22} />
+                </div>
+                
+                <h3 className="font-grotesk font-bold text-white text-xl tracking-[1px] uppercase mb-2">TERMINATE SYSTEM RECORD</h3>
+                <p className="text-white/40 font-mono text-[10px] tracking-[2px] uppercase mb-4 text-[#FF3B30]/80 font-bold">
+                  TARGET ADDR: {getSummaryCode(activeTab, deleteModal.targetId || 0)}
+                </p>
+                
+                <p className="text-white/60 font-inter text-[13px] leading-relaxed mb-8">
+                  Are you sure you want to permanently purge this database sequence? This action overrides system parameters and cannot be undone.
+                </p>
+                
+                <div className="flex gap-4 w-full">
+                  <button 
+                    type="button" 
+                    onClick={() => setDeleteModal({ isOpen: false, targetId: null })}
+                    className="flex-1 py-3 border border-white/10 rounded text-white/60 hover:text-white hover:bg-white/5 font-mono text-[11px] font-bold tracking-[2px] uppercase transition-colors"
+                  >
+                    ABORT
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={executeDeleteData}
+                    className="flex-1 py-3 bg-[#FF3B30]/10 border border-[#FF3B30]/40 text-[#FF3B30] rounded font-mono text-[11px] font-bold tracking-[2px] uppercase hover:bg-[#FF3B30] hover:text-white shadow-[0_0_15px_rgba(255,59,48,0.2)] transition-all"
+                  >
+                    PURGE DATA
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }} className="bg-transparent pb-4">
         
         <div className="mb-10">
@@ -389,11 +517,7 @@ function AdminControlContent() {
               onClick={() => viewMode === "table" ? handleAddNew() : setViewMode("table")}
               className="px-6 py-2.5 bg-[#B026FF]/10 text-[#E5B5FF] border border-[#B026FF]/30 rounded text-sm font-bold tracking-[2px] uppercase hover:bg-[#B026FF]/20 transition-all flex items-center justify-center gap-2"
             >
-              {viewMode === "table" ? (
-                <><Plus size={16} /> ADD NEW DATA</>
-              ) : (
-                <><Users size={16} /> VIEW DATA</>
-              )}
+              {viewMode === "table" ? <><Plus size={16} /> ADD NEW DATA</> : <><Users size={16} /> VIEW DATA</>}
             </button>
           )}
         </div>
@@ -422,9 +546,7 @@ function AdminControlContent() {
 
                     {activeTab === "fleet" && (() => {
                       let filtered = filterData(shipments, ['code', 'senderName', 'recipientName', 'status']);
-                      if (fleetStatusFilter !== "ALL") {
-                        filtered = filtered.filter(s => s.status === fleetStatusFilter);
-                      }
+                      if (fleetStatusFilter !== "ALL") filtered = filtered.filter(s => s.status === fleetStatusFilter);
                       const { paginated } = paginate(filtered);
                       return paginated.map(s => (
                         <tr key={s.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
@@ -437,7 +559,7 @@ function AdminControlContent() {
                           </td>
                           <td className="p-4 flex justify-end gap-3">
                             <button type="button" onClick={() => handleEdit(s)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
-                            <button type="button" onClick={() => handleDelete(s.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
+                            <button type="button" onClick={() => openDeleteConfirmation(s.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
                           </td>
                         </tr>
                       ));
@@ -463,7 +585,7 @@ function AdminControlContent() {
                             </span>
                           </td>
                           <td className="p-4 flex justify-end gap-3 align-top">
-                            <button type="button" onClick={() => handleDelete(c.id)} className="text-white/40 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-500/10">
+                            <button type="button" onClick={() => openDeleteConfirmation(c.id)} className="text-white/40 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-500/10">
                               <Trash2 size={18} />
                             </button>
                           </td>
@@ -481,7 +603,7 @@ function AdminControlContent() {
                           <td className="p-4 text-sm text-white/50 uppercase">{c.role ? c.role.replace(/_/g, ' ') : 'crew'}</td>
                           <td className="p-4 flex justify-end gap-3">
                             <button type="button" onClick={() => handleEdit(c)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
-                            <button type="button" onClick={() => handleDelete(c.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
+                            <button type="button" onClick={() => openDeleteConfirmation(c.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
                           </td>
                         </tr>
                       ));
@@ -497,7 +619,7 @@ function AdminControlContent() {
                           <td className="p-4 text-sm text-white/50">{v.capacity} {v.capacityUnit || "TONNES"}</td>
                           <td className="p-4 flex justify-end gap-3">
                             <button type="button" onClick={() => handleEdit(v)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
-                            <button type="button" onClick={() => handleDelete(v.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
+                            <button type="button" onClick={() => openDeleteConfirmation(v.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
                           </td>
                         </tr>
                       ));
