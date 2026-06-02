@@ -354,7 +354,7 @@ function AdminControlContent() {
     );
   };
 
-  // --- SKELETON RENDER FUNCTIONS (RE-ADDED TO PREVENT COMPILER ERRORS) ---
+  // --- SKELETON RENDER FUNCTIONS ---
   const renderTableSkeleton = () => (
     <div className="bg-[#121317] rounded-lg border border-white/5 overflow-hidden animate-pulse">
       <div className="p-4 border-b border-white/5 bg-[#1a1b22] flex justify-between">
@@ -665,8 +665,10 @@ function AdminControlContent() {
                         <div className="flex-1">
                           <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">STATUS</label>
                           <div className="relative">
+                            {/* === FIX MENU DROP-DOWN: MENAMBAHKAN OPSI 'NOT DEPARTED YET' === */}
                             <select value={formData.status || "PENDING"} onChange={e => updateField("status", e.target.value)} className={getSelectClass("status")}>
                               <option value="PENDING">PENDING</option>
+                              <option value="NOT DEPARTED YET">NOT DEPARTED YET</option>
                               <option value="EN ROUTE">EN ROUTE</option>
                               <option value="DELAYED">DELAYED</option>
                               <option value="ARRIVED">ARRIVED</option>
