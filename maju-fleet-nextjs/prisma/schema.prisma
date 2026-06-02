@@ -136,3 +136,16 @@ model ShipmentDetail {
 
   shipment    Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
 }
+
+model AccessLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     // Kosong jika user tidak ditemukan
+  name      String
+  email     String
+  role      String
+  ipAddress String?
+  location  String?
+  device    String?
+  status    String   // "SUCCESS", "FAILED_PASSWORD", "USER_NOT_FOUND"
+  createdAt DateTime @default(now())
+}

@@ -68,7 +68,15 @@ export default function AdminNavbar() {
         { name: "CREW REGISTRATION", href: "/Dashboard-Admin/register?type=crew" }
       ]
     },
-    { name: "LOGS", href: "/Dashboard-Admin" }, 
+    { 
+      name: "LOGS", 
+      href: "/Dashboard-Admin/logs",
+      dropdown: [
+        { name: "FULL OVERVIEW", href: "/Dashboard-Admin/logs?role=all" },
+        { name: "ADMIN LOGS", href: "/Dashboard-Admin/logs?role=admin" },
+        { name: "CUSTOMER LOGS", href: "/Dashboard-Admin/logs?role=customer" }
+      ]
+    }, 
   ];
 
   return (

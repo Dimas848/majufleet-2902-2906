@@ -2,16 +2,41 @@
 
 import { PrismaClient, Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
-// Inisialisasi Prisma Singleton Pattern agar koneksi database tidak habis saat hot-reload
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 const prisma = globalForPrisma.prisma || new PrismaClient();
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 
 // ==============================================================================
-// 1. AUTHENTICATION & SESSION ACTIONS (LOGIN, REGISTER, COOKIES)
+// 1. AUTHENTICATION & SESSION ACTIONS (LOGIN, REGISTER, COOKIES, LOGS)
 // ==============================================================================
+
+// Helper untuk mencatat log otomatis
+async function recordAccessLog(email: string, status: string, user?: any) {
+  try {
+    const headersList = await headers();
+    const ipAddress = headersList.get("x-forwarded-for") || "127.0.0.1";
+    // Ambil info device dari user-agent, potong max 50 karakter agar rapi
+    const rawDevice = headersList.get("user-agent") || "Unknown Device";
+    const device = rawDevice.split(" ")[0].substring(0, 50); 
+
+    await prisma.accessLog.create({
+      data: {
+        userId: user ? user.id : null,
+        name: user ? user.name : "Unknown User",
+        email: email,
+        role: user ? user.role : "unknown",
+        ipAddress: ipAddress,
+        device: device,
+        location: "System / Online",
+        status: status,
+      }
+    });
+  } catch (error) {
+    console.error("Gagal mencatat log:", error);
+  }
+}
 
 export async function registerCustomer(formData: any) {
   try {
@@ -44,25 +69,25 @@ export async function registerCustomer(formData: any) {
 
 export async function loginCustomer(email: string, password?: string) {
   try {
-    if (!email || !password) {
-      return { success: false, message: "Email dan Password harus diisi." };
-    }
+    if (!email || !password) return { success: false, message: "Email dan Password harus diisi." };
 
-    const user = await prisma.user.findUnique({
-      where: { email: email }
-    });
+    const user = await prisma.user.findUnique({ where: { email: email } });
 
     if (!user || user.role !== "customer") {
+      await recordAccessLog(email, "FAILED"); // Catat log gagal
       return { success: false, message: "Email tidak ditemukan atau Anda bukan akun Customer!" };
     }
 
     if (user.password !== password) {
+      await recordAccessLog(email, "FAILED_PASSWORD", user); // Catat log salah password
       return { success: false, message: "Password yang Anda masukkan salah!" };
     }
 
     const cookieStore = await cookies();
     cookieStore.set("session_user_id", String(user.id), { httpOnly: true, maxAge: 60 * 60 * 24 });
     cookieStore.set("session_user_name", user.name, { maxAge: 60 * 60 * 24 });
+
+    await recordAccessLog(email, "SUCCESS", user); // Catat log sukses
 
     return { success: true, message: "Access Authorized. Welcome back!" };
   } catch (error) {
@@ -72,24 +97,23 @@ export async function loginCustomer(email: string, password?: string) {
 }
 
 export async function loginAdmin(commanderId: string, masterKey: string) {
-  if (!commanderId || !masterKey) {
-    return { success: false, message: "ACCESS DENIED: CREDENTIALS CANNOT BE EMPTY." };
-  }
+  if (!commanderId || !masterKey) return { success: false, message: "ACCESS DENIED." };
 
   try {
-    const adminUser = await prisma.user.findUnique({
-      where: { email: commanderId }
-    });
+    const adminUser = await prisma.user.findUnique({ where: { email: commanderId } });
 
     if (!adminUser) {
-      return { success: false, message: "ACCESS DENIED: USERNAME OR PASSWORD NOT FOUND IN DATABASE." };
+      await recordAccessLog(commanderId, "FAILED");
+      return { success: false, message: "ACCESS DENIED: USER NOT FOUND." };
     }
 
     if (adminUser.password !== masterKey) {
-      return { success: false, message: "ACCESS DENIED: USERNAME OR PASSWORD NOT FOUND IN DATABASE" };
+      await recordAccessLog(commanderId, "FAILED_PASSWORD", adminUser);
+      return { success: false, message: "ACCESS DENIED: PASSWORD INVALID." };
     }
 
     if (adminUser.role !== "administrator" && adminUser.role !== "captain") {
+      await recordAccessLog(commanderId, "FAILED_ROLE", adminUser);
       return { success: false, message: "ACCESS DENIED: ROLE NOT AUTHORIZED." };
     }
 
@@ -97,10 +121,12 @@ export async function loginAdmin(commanderId: string, masterKey: string) {
     cookieStore.set("admin_session_id", String(adminUser.id), { httpOnly: true, maxAge: 60 * 60 * 2 });
     cookieStore.set("admin_name", adminUser.name, { maxAge: 60 * 60 * 2 });
 
+    await recordAccessLog(commanderId, "SUCCESS", adminUser);
+
     return { success: true, message: "ACCESS AUTHORIZED." };
   } catch (error) {
     console.error("Admin Auth Error:", error);
-    return { success: false, message: "USERNAME / PASSWORD INVALID." };
+    return { success: false, message: "SYSTEM ERROR." };
   }
 }
 
@@ -111,6 +137,20 @@ export async function getCurrentSession() {
 
   if (!userId) return null;
   return { id: parseInt(userId), name: userName };
+}
+
+// Fungsi Baru untuk Menarik Data Access Log ke UI Admin
+export async function getSystemAccessLogs() {
+  try {
+    const logs = await prisma.accessLog.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100 // Menampilkan 100 log terakhir agar tidak terlalu berat
+    });
+    return { success: true, logs };
+  } catch (error) {
+    console.error("Gagal mengambil data logs:", error);
+    return { success: false, logs: [] };
+  }
 }
 
 // ==============================================================================
