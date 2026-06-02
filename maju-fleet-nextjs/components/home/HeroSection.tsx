@@ -1,12 +1,28 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation"; // 💡 IMPOR BARU: Untuk fallback navigasi antar halaman
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 
 export default function HeroSection() {
+  const router = useRouter();
+
+  // 💡 HANDLER SMARTSROLL & FALLBACK ROUTING
+  const handleExploreUs = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    const aboutElement = document.getElementById("about");
+    
+    if (aboutElement) {
+      // Skenario A: Jika komponen About berada di satu halaman utama (Single Page)
+      aboutElement.scrollIntoView({ behavior: "smooth" });
+    } else {
+      // Skenario B: Jika folder about diakses sebagai rute terpisah (/about)
+      router.push("/about");
+    }
+  };
+
   return (
-    // Tambahkan pt-28 agar konten tidak tertutup navbar, dan pb-10 untuk jarak bawah
     <section className="relative min-h-[100vh] flex flex-col items-center justify-between overflow-hidden pt-28 pb-10">
       
       {/* Background Image */}
@@ -29,7 +45,7 @@ export default function HeroSection() {
         style={{ background: "#B026FF", opacity: 0.15, filter: "blur(100px)" }}
       />
 
-      {/* Main Content (Centered) - Tambahkan flex-grow dan justify-center */}
+      {/* Main Content (Centered) */}
       <div className="relative z-10 max-w-[900px] mx-auto px-6 w-full flex flex-col items-center text-center flex-grow justify-center mb-12 mt-4">
         
         {/* Headline */}
@@ -76,12 +92,10 @@ export default function HeroSection() {
             </button>
           </motion.div>
 
+          {/* 💡 FIX: Menggunakan handler hybrid yang kebal macet */}
           <a
             href="#about"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' });
-            }}
+            onClick={handleExploreUs}
             className="flex items-center gap-2 font-grotesk font-bold text-[13px] md:text-[14px] uppercase tracking-[1px] text-white/80 hover:text-white transition-all duration-200 hover:gap-3"
           >
             Explore Us <ArrowRight size={16} />
@@ -89,8 +103,7 @@ export default function HeroSection() {
         </motion.div>
       </div>
 
-      {/* --- FIX OVERLAP ISSUE --- */}
-      {/* Scroll Indicator at the Bottom (Menghapus 'absolute' dan mengubah menjadi normal flow) */}
+      {/* Scroll Indicator at the Bottom */}
       <motion.div 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
