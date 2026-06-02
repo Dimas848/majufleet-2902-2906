@@ -442,7 +442,7 @@ function AnalyticsContent() {
               </AnimatePresence>
             </div>
           </div>
-          <p className="font-mono text-[11px] text-white/70 tracking-widest uppercase mb-10">LAST UPDATE: <br/> <span className="text-[#00E3FD] font-bold mt-1 inline-block flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[#00E3FD] animate-pulse"></span>LIVE FROM NEON DB</span></p>
+          <p className="font-mono text-[11px] text-white/70 tracking-widest uppercase mb-10">LAST UPDATE: <br/> <span className="text-[#00E3FD] font-bold mt-1 inline-block items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[#00E3FD] animate-pulse"></span>LIVE FROM NEON DB</span></p>
           <div className="flex flex-col gap-2">
             <button onClick={() => handleTabChange("TREND")} className={`flex items-center gap-4 px-4 py-4 rounded-lg font-mono text-[11px] tracking-widest uppercase transition-all text-left ${analyticsSidebarTab === "TREND" ? "bg-[#B026FF]/10 border-l-2 border-[#B026FF] text-[#E5B5FF] font-bold" : "text-white/40 hover:bg-white/5 hover:text-white"}`}><TrendingUp size={16} /> CARGO TREND</button>
             <button onClick={() => handleTabChange("INCOME")} className={`flex items-center gap-4 px-4 py-4 rounded-lg font-mono text-[11px] tracking-widest uppercase transition-all text-left ${analyticsSidebarTab === "INCOME" ? "bg-[#B026FF]/10 border-l-2 border-[#B026FF] text-[#E5B5FF] font-bold" : "text-white/40 hover:bg-white/5 hover:text-white"}`}><Activity size={16} /> AVERAGE INCOME</button>
