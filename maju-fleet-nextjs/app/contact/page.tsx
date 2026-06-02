@@ -1,7 +1,20 @@
-// File: app/contact/page.tsx
 import ContactForm from "@/components/contact/ContactForm";
 import ContactPersons from "@/components/contact/ContactPersons";
 import { FadeUp } from "@/components/FadeUp";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Contact Us",
+  description: "Get in touch with Maju Fleet Command Center. Establish secure contract lines, specialized crane logistics, and real-time fleet allocation integrations.",
+  keywords: ["contact logistics", "fleet command center", "support maju fleet", "indonesia cargo hub"],
+  openGraph: {
+    title: "Contact Logistics Control | Maju Fleet",
+    description: "Establish encrypted communications and priority logistics lines with our global tracking center.",
+    url: "https://maju-fleet.vercel.app/contact",
+    type: "website",
+    images: ["/shiphomebackground.png"],
+  },
+};
 
 export default function ContactPage() {
   return (
