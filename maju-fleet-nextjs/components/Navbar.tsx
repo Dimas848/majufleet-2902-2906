@@ -586,7 +586,7 @@ export default function Navbar() {
                 </form>
                 <div className="mt-6 flex flex-col items-center gap-3 font-inter text-[12px]">
                   <button onClick={() => switchModal("login")} className="text-white/40 hover:text-[#BDF4FF] transition-colors uppercase tracking-[1px] text-[10px] font-grotesk mt-1 flex items-center gap-1">
-                    ← RETURN TO CREW LOGIN
+                    ← RETURN TO LOGIN
                   </button>
                 </div>
               </motion.div>
