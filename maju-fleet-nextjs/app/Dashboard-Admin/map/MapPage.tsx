@@ -37,7 +37,6 @@ function MapSkeleton() {
             <div className="h-6 w-16 bg-white/10 rounded"></div>
             <div className="h-6 w-16 bg-white/10 rounded"></div>
           </div>
-          {/* Search bar skeleton */}
           <div className="h-9 w-full bg-white/10 rounded mb-4"></div>
           <div className="flex-1 flex flex-col gap-4 pr-2">
             {[1, 2, 3, 4].map((i) => (
@@ -54,7 +53,6 @@ function MapSkeleton() {
   );
 }
 
-// Mapping koordinat berdasarkan nama kota (fallback jika DB tidak ada lat/lng)
 const CITY_COORDS: Record<string, [number, number]> = {
   "Jakarta": [-6.2, 106.8],
   "Rotterdam": [51.9, 4.5],
@@ -91,12 +89,13 @@ function MapContent() {
   const [editStatus, setEditStatus] = useState("");
   const [isEditStatusDropdownOpen, setIsEditStatusDropdownOpen] = useState(false);
 
-  // ✅ Search state
   const [searchQuery, setSearchQuery] = useState("");
-
-  // ✅ Data dari database
   const [vesselsData, setVesselsData] = useState<any[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // ✅ FITUR BARU: State Paginasi Sidebar (5 Baris Per Halaman)
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     const tabParam = searchParams.get("tab");
@@ -104,7 +103,6 @@ function MapContent() {
     else setMapSubTab("ALL");
   }, [searchParams]);
 
-  // ✅ Fetch data dari Neon DB
   useEffect(() => {
     const fetchMapData = async () => {
       setIsLoadingData(true);
@@ -160,7 +158,6 @@ function MapContent() {
 
   const activeVesselDetails = vesselsData.find(v => v.id === selectedVessel);
 
-  // ✅ Filter dengan search query
   const displayedVessels = vesselsData.filter(v => {
     const passesTab = mapSubTab === "ALL" ? true : (v.status === "DELAYED" || v.status === "NOT DEPARTED YET");
     const passesStatus = mapStatusFilter === "ALL" ? true : v.status === mapStatusFilter;
@@ -175,6 +172,21 @@ function MapContent() {
     );
     return passesTab && passesStatus && passesSearch;
   });
+
+  // ✅ FITUR BARU: Auto-reset ke halaman 1 jika filter atau pencarian berubah
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, mapSubTab, mapStatusFilter]);
+
+  // ✅ FITUR BARU: Logika Slice untuk data 5 baris terpaginasi
+  const totalPages = Math.ceil(displayedVessels.length / itemsPerPage);
+  const paginatedVessels = displayedVessels.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  // Perhitungan pembatasan windowing tombol halaman (max 4 tombol tampil)
+  const pageWindow = 4;
+  let startPage = Math.max(1, currentPage - Math.floor(pageWindow / 2));
+  let endPage = Math.min(totalPages, startPage + pageWindow - 1);
+  if (endPage - startPage < pageWindow - 1) startPage = Math.max(1, endPage - pageWindow + 1);
 
   const openControlModal = () => {
     if (activeVesselDetails) {
@@ -283,7 +295,7 @@ function MapContent() {
                 </button>
               </div>
 
-              {/* ✅ SEARCH BAR */}
+              {/* SEARCH BAR */}
               <div className="relative mb-4 z-30">
                 <Search
                   size={13}
@@ -312,7 +324,7 @@ function MapContent() {
                 </AnimatePresence>
               </div>
 
-              {/* ✅ Hasil search info */}
+              {/* Hasil search info */}
               {searchQuery && (
                 <motion.p
                   initial={{ opacity: 0 }}
@@ -325,70 +337,122 @@ function MapContent() {
 
               {/* Vessel List */}
               <div className="flex-1 overflow-y-auto flex flex-col gap-4 pr-2 custom-scrollbar relative z-30">
-                <AnimatePresence mode="popLayout">
+                <AnimatePresence mode="wait">
                   {displayedVessels.length === 0 ? (
                     <motion.div
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="text-center py-10 text-white/30 font-mono text-[11px] tracking-widest uppercase"
-                    >
-                      {searchQuery ? `No vessels match "${searchQuery}"` : "No vessels found"}
-                    </motion.div>
-                  ) : displayedVessels.map((vessel, idx) => (
-                    <motion.div
+                      key="empty-state"
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ delay: idx * 0.05 }}
-                      key={vessel.id}
-                      onClick={() => setSelectedVessel(vessel.id)}
-                      className={`bg-transparent border rounded p-5 relative overflow-hidden group transition-all cursor-pointer ${
-                        vessel.id === selectedVessel
-                          ? 'border-[#B026FF] bg-[#1a1b22] shadow-[0_0_15px_rgba(176,38,255,0.1)]'
-                          : vessel.reason
-                          ? 'border-[#FF3B30]/30 hover:border-[#FF3B30]/50 hover:bg-[#1a1b22]'
-                          : 'border-white/10 hover:border-[#00E3FD]/50 hover:bg-[#1a1b22]'
-                      }`}
+                      exit={{ opacity: 0, y: -10 }}
+                      className="flex flex-col items-center justify-center py-16 text-center w-full"
                     >
-                      {vessel.reason && <div className="absolute top-0 left-0 w-1 h-full bg-[#FF3B30]"></div>}
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h3 className={`font-grotesk font-bold text-[13px] tracking-[1px] transition-colors ${vessel.id === selectedVessel ? 'text-[#E5B5FF]' : 'text-white group-hover:text-[#00E3FD]'}`}>
-                            {/* ✅ Highlight search match in ID */}
-                            {searchQuery && vessel.id.toLowerCase().includes(searchQuery.toLowerCase()) ? (
-                              <span dangerouslySetInnerHTML={{
-                                __html: vessel.id.replace(
-                                  new RegExp(`(${searchQuery})`, 'gi'),
-                                  '<mark style="background: rgba(176,38,255,0.35); color: #E5B5FF; border-radius: 2px; padding: 0 1px;">$1</mark>'
-                                )
-                              }} />
-                            ) : vessel.id}
-                          </h3>
-                          <p className="text-[9px] font-mono text-white/30 tracking-widest mt-0.5">{vessel.vesselName}</p>
-                        </div>
-                        <span className={`flex items-center gap-1.5 font-mono text-[9px] font-bold tracking-widest uppercase border px-2 py-0.5 rounded-[3px] bg-black/40 ${vessel.reason ? 'border-[#FF3B30]/40 text-[#FF3B30]' : 'border-white/10 text-[#00E3FD]'}`}>
-                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: vessel.dotColor }}></span> {vessel.status}
-                        </span>
-                      </div>
-                      {!vessel.reason ? (
-                        <div className="flex flex-col gap-2">
-                          <div className="flex justify-between text-[10px] font-mono"><span className="text-white/40 uppercase tracking-widest">PACKAGE</span><span className="text-white/70 uppercase tracking-widest text-right">{vessel.package}</span></div>
-                          <div className="flex justify-between text-[10px] font-mono"><span className="text-white/40 uppercase tracking-widest">CREW</span><span className="text-white/70 uppercase tracking-widest text-right">{vessel.crew}</span></div>
-                          <div className="flex justify-between text-[10px] font-mono"><span className="text-white/40 uppercase tracking-widest">ROUTE</span><span className="text-[#00E3FD] tracking-widest text-right">{vessel.origin} → {vessel.dest}</span></div>
-                        </div>
-                      ) : (
-                        <div className="flex text-[10px] font-mono gap-4 mt-2 justify-between">
-                          <span className="text-white/40 uppercase tracking-widest">REASON</span>
-                          <span className="text-[#FF3B30] tracking-widest text-right">{vessel.reason}</span>
-                        </div>
+                      <AlertTriangle size={24} className="text-white/20 mb-3" />
+                      <p className="text-white/40 font-mono text-[10px] tracking-widest uppercase px-4 leading-relaxed">
+                        {searchQuery ? `No vessels match "${searchQuery}"` : "No vessels found"}
+                      </p>
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery("")}
+                          className="mt-4 text-[9px] font-mono text-[#B026FF] hover:text-white border border-[#B026FF]/40 px-3 py-1.5 rounded transition-colors uppercase tracking-widest"
+                        >
+                          Clear Search
+                        </button>
                       )}
                     </motion.div>
-                  ))}
+                  ) : (
+                    <motion.div key="list-container" className="flex flex-col gap-4 w-full">
+                      {/* ✅ FIX: Sekarang merender paginatedVessels (Maksimal 5 baris) */}
+                      {paginatedVessels.map((vessel, idx) => (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ delay: idx * 0.05 }}
+                          key={vessel.id}
+                          onClick={() => setSelectedVessel(vessel.id)}
+                          className={`bg-transparent border rounded p-5 relative overflow-hidden group transition-all cursor-pointer ${
+                            vessel.id === selectedVessel
+                              ? 'border-[#B026FF] bg-[#1a1b22] shadow-[0_0_15px_rgba(176,38,255,0.1)]'
+                              : vessel.reason
+                              ? 'border-[#FF3B30]/30 hover:border-[#FF3B30]/50 hover:bg-[#1a1b22]'
+                              : 'border-white/10 hover:border-[#00E3FD]/50 hover:bg-[#1a1b22]'
+                          }`}
+                        >
+                          {vessel.reason && <div className="absolute top-0 left-0 w-1 h-full bg-[#FF3B30]"></div>}
+                          <div className="flex justify-between items-start mb-4">
+                            <div>
+                              <h3 className={`font-grotesk font-bold text-[13px] tracking-[1px] transition-colors ${vessel.id === selectedVessel ? 'text-[#E5B5FF]' : 'text-white group-hover:text-[#00E3FD]'}`}>
+                                {searchQuery && vessel.id.toLowerCase().includes(searchQuery.toLowerCase()) ? (
+                                  <span dangerouslySetInnerHTML={{
+                                    __html: vessel.id.replace(
+                                      new RegExp(`(${searchQuery})`, 'gi'),
+                                      '<mark style="background: rgba(176,38,255,0.35); color: #E5B5FF; border-radius: 2px; padding: 0 1px;">$1</mark>'
+                                    )
+                                  }} />
+                                ) : vessel.id}
+                              </h3>
+                              <p className="text-[9px] font-mono text-white/30 tracking-widest mt-0.5">{vessel.vesselName}</p>
+                            </div>
+                            <span className={`flex items-center gap-1.5 font-mono text-[9px] font-bold tracking-widest uppercase border px-2 py-0.5 rounded-[3px] bg-black/40 ${vessel.reason ? 'border-[#FF3B30]/40 text-[#FF3B30]' : 'border-white/10 text-[#00E3FD]'}`}>
+                              <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: vessel.dotColor }}></span> {vessel.status}
+                            </span>
+                          </div>
+                          {!vessel.reason ? (
+                            <div className="flex flex-col gap-2">
+                              <div className="flex justify-between text-[10px] font-mono"><span className="text-white/40 uppercase tracking-widest">PACKAGE</span><span className="text-white/70 uppercase tracking-widest text-right">{vessel.package}</span></div>
+                              <div className="flex justify-between text-[10px] font-mono"><span className="text-white/40 uppercase tracking-widest">CREW</span><span className="text-white/70 uppercase tracking-widest text-right">{vessel.crew}</span></div>
+                              <div className="flex justify-between text-[10px] font-mono"><span className="text-white/40 uppercase tracking-widest">ROUTE</span><span className="text-[#00E3FD] tracking-widest text-right">{vessel.origin} → {vessel.dest}</span></div>
+                            </div>
+                          ) : (
+                            <div className="flex text-[10px] font-mono gap-4 mt-2 justify-between">
+                              <span className="text-white/40 uppercase tracking-widest">REASON</span>
+                              <span className="text-[#FF3B30] tracking-widest text-right">{vessel.reason}</span>
+                            </div>
+                          )}
+                        </motion.div>
+                      ))}
+                    </motion.div>
+                  )}
                 </AnimatePresence>
               </div>
 
+              {/* ✅ FITUR BARU: Komponen Paginasi Sidebar Estetik */}
+              {totalPages > 1 && (
+                <div className="flex justify-between items-center gap-2 mt-4 pt-4 border-t border-white/5 font-mono text-[10px] tracking-widest uppercase text-white/40 relative z-40 shrink-0">
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="hover:text-[#E5B5FF] disabled:opacity-20 transition-colors cursor-pointer disabled:cursor-not-allowed font-bold"
+                  >
+                    PREV
+                  </button>
+                  <div className="flex gap-1.5">
+                    {Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i).map(num => (
+                      <button
+                        key={num}
+                        onClick={() => setCurrentPage(num)}
+                        className={`px-2.5 py-1 rounded transition-colors text-[10px] font-mono ${
+                          currentPage === num
+                            ? "border border-[#B026FF] text-[#E5B5FF] bg-[#B026FF]/20 shadow-[0_0_10px_rgba(176,38,255,0.2)] font-bold"
+                            : "hover:text-white hover:bg-white/5"
+                        }`}
+                      >
+                        {num.toString().padStart(2, '0')}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="hover:text-[#E5B5FF] disabled:opacity-20 transition-colors cursor-pointer disabled:cursor-not-allowed font-bold"
+                  >
+                    NEXT
+                  </button>
+                </div>
+              )}
+
               {/* Action Control */}
-              <div className="mt-6 pt-4">
+              <div className="mt-6 pt-4 shrink-0">
                 <p className="font-mono text-[10px] text-white/40 tracking-widest uppercase mb-3">ACTION CONTROL</p>
                 <button
                   onClick={openControlModal}

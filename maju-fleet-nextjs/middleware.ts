@@ -8,29 +8,31 @@ export function middleware(request: NextRequest) {
   const hasUserSession = request.cookies.has('session_user_id');
   const hasAdminSession = request.cookies.has('admin_session_id');
 
-  // 2. Proteksi Jalur Dashboard CUSTOMER
-  if (pathname.startsWith('/Dashboard-User')) {
+  // 2. Proteksi Jalur Dashboard CUSTOMER/USER (Menggunakan rute /dashboard)
+  if (pathname === '/dashboard' || pathname.startsWith('/dashboard/')) {
     if (!hasUserSession) {
-      // Jika tidak punya cookie customer, tendang paksa ke halaman login utama
-      return NextResponse.redirect(new URL('/login', request.url));
+      // Jika tidak login, tendang ke halaman utama dan pemicu modal login aktif
+      return NextResponse.redirect(new URL('/?auth=customer_required', request.url));
     }
   }
 
-  // 3. Proteksi Jalur Dashboard ADMIN
-  if (pathname.startsWith('/Dashboard-Admin')) {
+  // 3. Proteksi Jalur Dashboard ADMIN (Tetap /Dashboard-Admin)
+  if (pathname === '/Dashboard-Admin' || pathname.startsWith('/Dashboard-Admin/')) {
     if (!hasAdminSession) {
-      // Jika tidak punya cookie admin, tendang paksa ke halaman login utama juga
-      return NextResponse.redirect(new URL('/login', request.url));
+      // Jika tidak login, tendang ke halaman utama dan pemicu modal administrator override aktif
+      return NextResponse.redirect(new URL('/?auth=admin_required', request.url));
     }
   }
 
   return NextResponse.next();
 }
 
-// Pastikan matcher menjaga folder Dashboard-User dan Dashboard-Admin yang sesungguhnya
+// ✅ MATCH CONFIGURATION: Menjaga rute /dashboard dan /Dashboard-Admin secara instan
 export const config = {
   matcher: [
-    '/Dashboard-User/:path*', 
+    '/dashboard',
+    '/dashboard/:path*', 
+    '/Dashboard-Admin',
     '/Dashboard-Admin/:path*'
   ],
 };

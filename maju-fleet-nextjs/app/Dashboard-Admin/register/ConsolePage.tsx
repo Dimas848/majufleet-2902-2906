@@ -289,11 +289,16 @@ function AdminControlContent() {
     }
   };
 
-  const filterData = (arr: any[], keys: string[]) => {
+  // ✅ FIX: Logika filter data pintar yang otomatis mengenali format ID (Prefix-ID)
+  const filterData = (arr: any[], keys: string[], prefix: string = "") => {
     if (!searchQuery) return arr;
-    return arr.filter(item =>
-      keys.some(key => String(item[key] || '').toLowerCase().includes(searchQuery.toLowerCase()))
-    );
+    const query = searchQuery.toLowerCase();
+    
+    return arr.filter(item => {
+      if (prefix && `${prefix}-${item.id}`.toLowerCase().includes(query)) return true;
+      if (String(item.id).includes(query)) return true;
+      return keys.some(key => String(item[key] || '').toLowerCase().includes(query));
+    });
   };
 
   const paginate = (arr: any[]) => {
@@ -547,6 +552,27 @@ function AdminControlContent() {
                     {activeTab === "fleet" && (() => {
                       let filtered = filterData(shipments, ['code', 'senderName', 'recipientName', 'status']);
                       if (fleetStatusFilter !== "ALL") filtered = filtered.filter(s => s.status === fleetStatusFilter);
+                      
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={4}>
+                              <div className="flex flex-col items-center justify-center py-20">
+                                <AlertCircle size={32} className="text-white/20 mb-4" />
+                                <p className="text-white/40 font-mono tracking-widest text-[12px] mb-4 uppercase">
+                                  {searchQuery ? `NO RESULTS FOUND FOR "${searchQuery}"` : "NO FLEET DATA AVAILABLE."}
+                                </p>
+                                {searchQuery && (
+                                  <button onClick={() => setSearchQuery("")} className="text-[10px] font-mono text-[#B026FF] hover:text-white border border-[#B026FF]/50 px-4 py-2 rounded transition-colors uppercase tracking-widest">
+                                    Clear Search
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
                       const { paginated } = paginate(filtered);
                       return paginated.map(s => (
                         <tr key={s.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
@@ -566,7 +592,28 @@ function AdminControlContent() {
                     })()}
 
                     {activeTab === "customer" && (() => {
-                      const filtered = filterData(customers, ['name', 'email', 'phone']);
+                      const filtered = filterData(customers, ['name', 'email', 'phone'], 'CUST');
+                      
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={4}>
+                              <div className="flex flex-col items-center justify-center py-20">
+                                <AlertCircle size={32} className="text-white/20 mb-4" />
+                                <p className="text-white/40 font-mono tracking-widest text-[12px] mb-4 uppercase">
+                                  {searchQuery ? `NO RESULTS FOUND FOR "${searchQuery}"` : "NO CUSTOMER DATA AVAILABLE."}
+                                </p>
+                                {searchQuery && (
+                                  <button onClick={() => setSearchQuery("")} className="text-[10px] font-mono text-[#B026FF] hover:text-white border border-[#B026FF]/50 px-4 py-2 rounded transition-colors uppercase tracking-widest">
+                                    Clear Search
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
                       const { paginated } = paginate(filtered);
                       return paginated.map(c => (
                         <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
@@ -594,7 +641,28 @@ function AdminControlContent() {
                     })()}
 
                     {activeTab === "crew" && (() => {
-                      const filtered = filterData(crews, ['name', 'email', 'role']);
+                      const filtered = filterData(crews, ['name', 'email', 'role'], 'CRW');
+                      
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={4}>
+                              <div className="flex flex-col items-center justify-center py-20">
+                                <AlertCircle size={32} className="text-white/20 mb-4" />
+                                <p className="text-white/40 font-mono tracking-widest text-[12px] mb-4 uppercase">
+                                  {searchQuery ? `NO RESULTS FOUND FOR "${searchQuery}"` : "NO CREW DATA AVAILABLE."}
+                                </p>
+                                {searchQuery && (
+                                  <button onClick={() => setSearchQuery("")} className="text-[10px] font-mono text-[#B026FF] hover:text-white border border-[#B026FF]/50 px-4 py-2 rounded transition-colors uppercase tracking-widest">
+                                    Clear Search
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
                       const { paginated } = paginate(filtered);
                       return paginated.map(c => (
                         <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
@@ -610,7 +678,28 @@ function AdminControlContent() {
                     })()}
 
                     {activeTab === "vessel" && (() => {
-                      const filtered = filterData(vessels, ['name', 'crewLead', 'type']);
+                      const filtered = filterData(vessels, ['name', 'crewLead', 'type'], 'VSL');
+                      
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={4}>
+                              <div className="flex flex-col items-center justify-center py-20">
+                                <AlertCircle size={32} className="text-white/20 mb-4" />
+                                <p className="text-white/40 font-mono tracking-widest text-[12px] mb-4 uppercase">
+                                  {searchQuery ? `NO RESULTS FOUND FOR "${searchQuery}"` : "NO VESSEL DATA AVAILABLE."}
+                                </p>
+                                {searchQuery && (
+                                  <button onClick={() => setSearchQuery("")} className="text-[10px] font-mono text-[#B026FF] hover:text-white border border-[#B026FF]/50 px-4 py-2 rounded transition-colors uppercase tracking-widest">
+                                    Clear Search
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      }
+
                       const { paginated } = paginate(filtered);
                       return paginated.map(v => (
                         <tr key={v.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
@@ -634,9 +723,9 @@ function AdminControlContent() {
                 if (fleetStatusFilter !== "ALL") filtered = filtered.filter(s => s.status === fleetStatusFilter);
                 return <PaginationBar total={filtered.length} />;
               })()}
-              {activeTab === "customer" && <PaginationBar total={filterData(customers, ['name', 'email', 'phone']).length} />}
-              {activeTab === "crew" && <PaginationBar total={filterData(crews, ['name', 'email', 'role']).length} />}
-              {activeTab === "vessel" && <PaginationBar total={filterData(vessels, ['name', 'crewLead', 'type']).length} />}
+              {activeTab === "customer" && <PaginationBar total={filterData(customers, ['name', 'email', 'phone'], 'CUST').length} />}
+              {activeTab === "crew" && <PaginationBar total={filterData(crews, ['name', 'email', 'role'], 'CRW').length} />}
+              {activeTab === "vessel" && <PaginationBar total={filterData(vessels, ['name', 'crewLead', 'type'], 'VSL').length} />}
 
             </motion.div>
           ) : (
@@ -665,7 +754,6 @@ function AdminControlContent() {
                         <div className="flex-1">
                           <label className="text-[12px] font-bold text-white/40 tracking-[3px] uppercase mb-3 block font-mono">STATUS</label>
                           <div className="relative">
-                            {/* === FIX MENU DROP-DOWN: MENAMBAHKAN OPSI 'NOT DEPARTED YET' === */}
                             <select value={formData.status || "PENDING"} onChange={e => updateField("status", e.target.value)} className={getSelectClass("status")}>
                               <option value="PENDING">PENDING</option>
                               <option value="NOT DEPARTED YET">NOT DEPARTED YET</option>

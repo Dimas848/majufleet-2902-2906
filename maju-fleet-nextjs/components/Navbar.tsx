@@ -3,8 +3,8 @@
 import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, User, Lock, Eye, EyeOff, RefreshCw, ShieldAlert, ArrowLeft, Mail, Phone, ChevronDown, ChevronUp } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Menu, X, User, Lock, Eye, EyeOff, RefreshCw, ShieldAlert, ArrowLeft, Mail, Phone, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { loginCustomer, registerCustomer, loginAdmin } from "../app/lib/actions";
 
@@ -18,6 +18,8 @@ const links = [
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  
   const [menuOpen, setMenuOpen] = useState(false);
   const [mainMenuDropdown, setMainMenuDropdown] = useState(false);
   const [activeModal, setActiveModal] = useState<"none" | "login" | "register" | "admin">("none");
@@ -46,6 +48,9 @@ export default function Navbar() {
 
   const [captchaCode, setCaptchaCode] = useState("");
   
+  // ✅ STATE BARU: Untuk menampung eror per kolom input (Merah-merah di bawah input)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+
   const generateCaptcha = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
     let result = "";
@@ -54,6 +59,18 @@ export default function Navbar() {
     }
     setCaptchaCode(result);
   };
+
+  // HANDLER DETEKSI PEMBOBOLAN URL (MIDDLEWARE INTERCEPTOR)
+  useEffect(() => {
+    const authStatus = searchParams.get("auth");
+    if (authStatus === "customer_required") {
+      setActiveModal("login");
+      setErrorMsg("UNAUTHORIZED ACCESS: PLEASE LOG IN TO ENTER DASHBOARD.");
+    } else if (authStatus === "admin_required") {
+      setActiveModal("admin");
+      setErrorMsg("ACCESS DENIED: ADMINISTRATOR PRIVILEGES REQUIRED.");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     generateCaptcha();
@@ -92,14 +109,43 @@ export default function Navbar() {
   else if (strength === 75) strengthColor = "bg-yellow-400";
   else if (strength === 100) strengthColor = "bg-green-500";
 
+  // Fungsi pembantu untuk membersihkan eror kolom saat user mengetik
+  const clearFieldError = (field: string) => {
+    if (formErrors[field]) {
+      setFormErrors(prev => ({ ...prev, [field]: "" }));
+    }
+  };
+
+  // Re-usable komponen teks eror bawah kolom
+  const FieldError = ({ error }: { error?: string }) => {
+    if (!error) return null;
+    return (
+      <p className="text-[#FF3B30] text-[11px] font-mono mt-1.5 flex items-center gap-1.5 uppercase tracking-wide">
+        <AlertCircle size={12} className="text-[#FF3B30]" /> {error}
+      </p>
+    );
+  };
+
   // ==========================================
-  // 1. HANDLER LOGIN CUSTOMER (WITH ENGLISH TRANSLATION)
+  // 1. HANDLER LOGIN CUSTOMER
   // ==========================================
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
-    setLoading(true);
+    setFormErrors({});
 
+    // Validasi Client-side
+    let errors: Record<string, string> = {};
+    if (!loginEmail) errors.loginEmail = "Please enter username or email.";
+    if (!loginPassword) errors.loginPassword = "Please enter password.";
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setErrorMsg("MISSING FIELDS. FAILED TO PROCESS DATA.");
+      return;
+    }
+
+    setLoading(true);
     try {
       const res = await loginCustomer(loginEmail, loginPassword);
       if (res && res.success) {
@@ -108,12 +154,13 @@ export default function Navbar() {
         resetFormStates();
         router.push("/dashboard/bookship");
       } else {
-        // 🔄 MENGUBAH RESPON BAHASA INDONESIA KE BAHASA INGGRIS UNTUK DOSEN
         let rawMessage = res?.message || "INVALID USERNAME OR PASSWORD.";
         if (rawMessage.includes("tidak ditemukan") || rawMessage.includes("bukan akun Customer")) {
           rawMessage = "EMAIL NOT FOUND OR INVALID CUSTOMER ACCOUNT.";
+          setFormErrors({ loginEmail: "Email not found registry record." });
         } else if (rawMessage.includes("salah") || rawMessage.includes("Password yang Anda masukkan salah")) {
           rawMessage = "INCORRECT PASSWORD. PLEASE TRY AGAIN.";
+          setFormErrors({ loginPassword: "Security clearance password match failed." });
         }
         setErrorMsg(rawMessage.toUpperCase());
         setLoading(false);
@@ -130,14 +177,28 @@ export default function Navbar() {
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
+    setFormErrors({});
 
-    if (regPassword !== regConfirm) {
-      setErrorMsg("PASSWORDS DO NOT MATCH.");
-      return;
+    // Validasi Client-side kolom kosong
+    let errors: Record<string, string> = {};
+    if (!regName) errors.regName = "Please enter full / company name.";
+    if (!regEmail) errors.regEmail = "Please enter email address.";
+    if (!regPhone) errors.regPhone = "Please enter phone number.";
+    if (!regPassword) errors.regPassword = "Please enter password.";
+    if (!regConfirm) errors.regConfirm = "Please repeat password verification.";
+    if (!captchaInput) errors.captchaInput = "Please enter captcha code verification.";
+
+    if (regPassword && regConfirm && regPassword !== regConfirm) {
+      errors.regConfirm = "PASSWORDS DO NOT MATCH SYSTEM RECORDS.";
     }
 
-    if (captchaInput.toUpperCase() !== captchaCode.toUpperCase()) {
-      setErrorMsg("INVALID CAPTCHA CODE.");
+    if (captchaInput && captchaInput.toUpperCase() !== captchaCode.toUpperCase()) {
+      errors.captchaInput = "INVALID CAPTCHA SECURITY CODE.";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setErrorMsg("MISSING FIELDS. FAILED TO PROCESS DATA.");
       return;
     }
 
@@ -171,8 +232,20 @@ export default function Navbar() {
   const handleAdminSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
-    setLoading(true);
+    setFormErrors({});
 
+    // Validasi Client-side admin
+    let errors: Record<string, string> = {};
+    if (!adminId) errors.adminId = "Please enter authorized commander id.";
+    if (!adminKey) errors.adminKey = "Please enter master clearance key.";
+
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
+      setErrorMsg("MISSING FIELDS. FAILED TO PROCESS DATA.");
+      return;
+    }
+
+    setLoading(true);
     try {
       const res = await loginAdmin(adminId, adminKey);
       if (res && res.success) {
@@ -192,6 +265,7 @@ export default function Navbar() {
 
   const resetFormStates = () => {
     setErrorMsg("");
+    setFormErrors({});
     setLoading(false);
     setLoginEmail("");
     setLoginPassword("");
@@ -208,6 +282,9 @@ export default function Navbar() {
   const switchModal = (modalType: "none" | "login" | "register" | "admin") => {
     resetFormStates();
     setActiveModal(modalType);
+    if (searchParams.get("auth")) {
+      router.replace(pathname);
+    }
   };
 
   if (
@@ -306,52 +383,58 @@ export default function Navbar() {
                 <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-[#B026FF]/30 rounded-br-xl pointer-events-none" />
                 <div className="flex flex-col items-center mb-6 mt-2">
                   <Image src="/logo.png" alt="Maju Fleet Logo" width={110} height={110} className="mb-0 opacity-100 drop-shadow-[0_0_15px_rgba(176,38,255,0.3)] -mr-3" />
-                  <h2 className="text-white font-grotesk font-bold text-2xl tracking-[3px] uppercase mt-[-5px]">Maju Fleet</h2>
+                  <h2 className="text-white font-grotesk font-bold text-2xl tracking-[3px] uppercase mt-[-5px]">MAJU FLEET</h2>
                 </div>
-
-                {errorMsg && (
-                  <div className="bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-[11px] text-center p-2.5 rounded mb-4 uppercase tracking-wide">
-                    {errorMsg}
-                  </div>
-                )}
 
                 <form onSubmit={handleLoginSubmit} className="flex flex-col gap-5">
                   <div>
-                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block">Username / Email</label>
+                    <label className={`font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block ${formErrors.loginEmail ? "text-[#FF3B30]" : "text-white/80"}`}>USERNAME / EMAIL</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><User size={16} /></div>
-                      <input type="email" required value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="Enter email" className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
+                      {/* ✅ FIX: Border dinamis berubah merah jika eror */}
+                      <input type="email" value={loginEmail} onChange={(e) => { setLoginEmail(e.target.value); clearFieldError("loginEmail"); }} placeholder="Enter email" className={`w-full bg-[#121317] border rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.loginEmail ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
                     </div>
-                    {/* STATIS TANPA kedap-kedip */}
-                    {errorMsg && (
+                    <FieldError error={formErrors.loginEmail} />
+                    {!searchParams.get("auth") && !formErrors.loginEmail && (
                       <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide">
-                        💡 Example: <button type="button" onClick={() => setLoginEmail("dimju@gmail.com")} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">dimju@gmail.com</button> (Click to fill)
+                        💡 Example: <button type="button" onClick={() => { setLoginEmail("dimju@gmail.com"); clearFieldError("loginEmail"); }} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">dimju@gmail.com</button> (Click to fill)
                       </span>
                     )}
                   </div>
+                  
                   <div>
-                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block">Password</label>
+                    <label className={`font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block ${formErrors.loginPassword ? "text-[#FF3B30]" : "text-white/80"}`}>PASSWORD</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Lock size={16} /></div>
-                      <input type={showLoginPassword ? "text" : "password"} required value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Enter password" className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
+                      {/* ✅ FIX: Border dinamis berubah merah jika eror */}
+                      <input type={showLoginPassword ? "text" : "password"} value={loginPassword} onChange={(e) => { setLoginPassword(e.target.value); clearFieldError("loginPassword"); }} placeholder="Enter password" className={`w-full bg-[#121317] border rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.loginPassword ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
                       <button type="button" onClick={() => setShowLoginPassword(!showLoginPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
                         {showLoginPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
-                    {/* STATIS TANPA kedap-kedip */}
-                    {errorMsg && (
+                    <FieldError error={formErrors.loginPassword} />
+                    {!searchParams.get("auth") && !formErrors.loginPassword && (
                       <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide">
-                        💡 Example: <button type="button" onClick={() => { setLoginPassword("maju123"); setShowLoginPassword(true); }} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">maju123</button> (Click to fill)
+                        💡 Example: <button type="button" onClick={() => { setLoginPassword("maju123"); setShowLoginPassword(true); clearFieldError("loginPassword"); }} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">maju123</button> (Click to fill)
                       </span>
                     )}
                   </div>
-                  <button type="submit" disabled={loading} className="w-full mt-3 py-3.5 rounded border border-[#B026FF]/50 bg-[#121317] hover:bg-[#B026FF]/10 hover:border-[#B026FF] text-white font-grotesk font-bold text-[13px] uppercase tracking-[2px] transition-all duration-300 disabled:opacity-50">
+
+                  {/* ✅ FIX: Posisi Banner Eror diletakkan di bawah (di atas tombol submit) sesuai gambar acuan */}
+                  {errorMsg && (
+                    <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="w-full bg-[#FF3B30]/5 border border-[#FF3B30]/20 p-4 rounded-lg flex items-center gap-3 text-left">
+                      <AlertCircle size={16} className="text-[#FF3B30] shrink-0" />
+                      <p className="text-[#FF3B30] text-[11px] font-mono font-bold uppercase tracking-[1.5px] leading-relaxed">{errorMsg}</p>
+                    </motion.div>
+                  )}
+
+                  <button type="submit" disabled={loading} className="w-full py-3.5 rounded border border-[#B026FF]/50 bg-[#121317] hover:bg-[#B026FF]/10 hover:border-[#B026FF] text-white font-grotesk font-bold text-[13px] uppercase tracking-[2px] transition-all duration-300 disabled:opacity-50 shadow-[0_0_20px_rgba(176,38,255,0.1)]">
                     {loading ? "Authenticating..." : "System Login"}
                   </button>
                 </form>
                 <div className="mt-6 flex flex-col items-center gap-3 font-inter text-[12px]">
                   <p className="text-white/60">Don't have an account? <button onClick={() => switchModal("register")} className="text-[#B026FF] font-semibold hover:text-[#BDF4FF] transition-colors">Register Now</button></p>
-                  <button onClick={() => switchModal("admin")} className="text-white/40 hover:text-[#BDF4FF] transition-colors uppercase tracking-[1px] text-[10px] font-grotesk mt-1">Login as Admin?</button>
+                  <button onClick={() => switchModal("admin")} className="text-white/40 hover:text-[#BDF4FF] transition-colors uppercase tracking-[1px] text-[10px] font-grotesk mt-1">LOGIN AS ADMIN?</button>
                 </div>
               </motion.div>
             )}
@@ -361,45 +444,46 @@ export default function Navbar() {
               <motion.div key="modal-register" initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-[420px] bg-[#0a0a0c] border border-white/10 rounded-xl p-8 shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10 my-auto">
                 <button onClick={() => switchModal("none")} className="absolute top-4 right-4 text-white/40 hover:text-[#B026FF] transition-colors"><X size={20} /></button>
                 <button onClick={() => switchModal("login")} className="absolute top-4 left-4 text-white/40 hover:text-[#B026FF] transition-colors"><ArrowLeft size={20} /></button>
-                <h2 className="text-white font-grotesk font-bold text-2xl tracking-[2px] uppercase mb-4 text-center">Register Account</h2>
+                <h2 className="text-white font-grotesk font-bold text-2xl tracking-[2px] uppercase mb-6 text-center">Register Account</h2>
                 
-                {errorMsg && (
-                  <div className="bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-[11px] text-center p-2.5 rounded mb-4 uppercase tracking-wide">
-                    {errorMsg}
-                  </div>
-                )}
-
                 <form onSubmit={handleRegisterSubmit} className="flex flex-col gap-4">
                   <div>
-                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block flex justify-between"><span>Full / Company Name</span></label>
+                    <label className={`font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block ${formErrors.regName ? "text-[#FF3B30]" : "text-white/80"}`}>Full / Company Name</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><User size={16} /></div>
-                      <input type="text" required value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="e.g. PT. Logistik Jaya" className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
+                      <input type="text" value={regName} onChange={(e) => { setRegName(e.target.value); clearFieldError("regName"); }} placeholder="e.g. PT. Logistik Jaya" className={`w-full bg-[#121317] border rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.regName ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
                     </div>
+                    <FieldError error={formErrors.regName} />
                   </div>
+
                   <div>
-                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block">Email</label>
+                    <label className={`font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block ${formErrors.regEmail ? "text-[#FF3B30]" : "text-white/80"}`}>Email</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Mail size={16} /></div>
-                      <input type="email" required value={regEmail} onChange={(e) => setRegEmail(e.target.value)} placeholder="Enter email address..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
+                      <input type="email" value={regEmail} onChange={(e) => { setRegEmail(e.target.value); clearFieldError("regEmail"); }} placeholder="Enter email address..." className={`w-full bg-[#121317] border rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.regEmail ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
                     </div>
+                    <FieldError error={formErrors.regEmail} />
                   </div>
+
                   <div>
-                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block">Phone Number</label>
+                    <label className={`font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block ${formErrors.regPhone ? "text-[#FF3B30]" : "text-white/80"}`}>Phone Number</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Phone size={16} /></div>
-                      <input type="tel" required value={regPhone} onChange={(e) => setRegPhone(e.target.value)} placeholder="08xxxxxxxxxx" className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
+                      <input type="tel" value={regPhone} onChange={(e) => { setRegPhone(e.target.value); clearFieldError("regPhone"); }} placeholder="08xxxxxxxxxx" className={`w-full bg-[#121317] border rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.regPhone ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
                     </div>
+                    <FieldError error={formErrors.regPhone} />
                   </div>
+
                   <div>
-                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block">Password</label>
+                    <label className={`font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block ${formErrors.regPassword ? "text-[#FF3B30]" : "text-white/80"}`}>Password</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Lock size={16} /></div>
-                      <input type={showRegPassword ? "text" : "password"} value={regPassword} onChange={(e) => setRegPassword(e.target.value)} required placeholder="Create password..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
+                      <input type={showRegPassword ? "text" : "password"} value={regPassword} onChange={(e) => { setRegPassword(e.target.value); clearFieldError("regPassword"); }} placeholder="Create password..." className={`w-full bg-[#121317] border rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.regPassword ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
                       <button type="button" onClick={() => setShowRegPassword(!showRegPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
                         {showRegPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
+                    <FieldError error={formErrors.regPassword} />
                     <div className="mt-2 flex items-center justify-between">
                       <div className="flex-1 h-1.5 bg-[#121317] rounded-full overflow-hidden mr-3">
                         <div className={`h-full ${strengthColor} transition-all duration-300`} style={{ width: `${strength}%` }}></div>
@@ -407,25 +491,38 @@ export default function Navbar() {
                       <span className="text-[10px] font-inter text-white/50">Strength: {strength}%</span>
                     </div>
                   </div>
+
                   <div>
-                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block">Confirm Password</label>
+                    <label className={`font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block ${formErrors.regConfirm ? "text-[#FF3B30]" : "text-white/80"}`}>Confirm Password</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Lock size={16} /></div>
-                      <input type={showRegConfirm ? "text" : "password"} required value={regConfirm} onChange={(e) => setRegConfirm(e.target.value)} placeholder="Repeat password..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
+                      <input type={showRegConfirm ? "text" : "password"} value={regConfirm} onChange={(e) => { setRegConfirm(e.target.value); clearFieldError("regConfirm"); }} placeholder="Repeat password..." className={`w-full bg-[#121317] border rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.regConfirm ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
                       <button type="button" onClick={() => setShowRegConfirm(!showRegConfirm)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
                         {showRegConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
+                    <FieldError error={formErrors.regConfirm} />
                   </div>
-                  <div className="mt-2">
+
+                  <div>
                     <div className="flex items-center gap-3 mb-2">
                       <span className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px]">Captcha:</span>
                       <div className="bg-[#121317] border border-[#B026FF]/20 px-3 py-1.5 rounded font-mono text-white font-bold tracking-[2px] select-none">{captchaCode}</div>
                       <button type="button" onClick={generateCaptcha} className="text-white/40 hover:text-[#B026FF] transition-colors"><RefreshCw size={14} /></button>
                     </div>
-                    <input type="text" required value={captchaInput} onChange={(e) => setCaptchaInput(e.target.value)} placeholder="Enter captcha code" className="w-full bg-[#121317] border border-[#B026FF]/30 rounded px-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
+                    <input type="text" value={captchaInput} onChange={(e) => { setCaptchaInput(e.target.value); clearFieldError("captchaInput"); }} placeholder="Enter captcha code" className={`w-full bg-[#121317] border rounded px-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.captchaInput ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
+                    <FieldError error={formErrors.captchaInput} />
                   </div>
-                  <button type="submit" disabled={loading} className="w-full mt-3 py-3.5 rounded border border-[#B026FF]/50 bg-[#121317] hover:bg-[#B026FF]/10 hover:border-[#B026FF] text-white font-grotesk font-bold text-[13px] uppercase tracking-[2px] transition-all duration-300 disabled:opacity-50">
+
+                  {/* ✅ Banner Eror Taktis Sejajar Di Atas Tombol Submit */}
+                  {errorMsg && (
+                    <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="w-full bg-[#FF3B30]/5 border border-[#FF3B30]/20 p-4 rounded-lg flex items-center gap-3 text-left">
+                      <AlertCircle size={16} className="text-[#FF3B30] shrink-0" />
+                      <p className="text-[#FF3B30] text-[11px] font-mono font-bold uppercase tracking-[1.5px] leading-relaxed">{errorMsg}</p>
+                    </motion.div>
+                  )}
+
+                  <button type="submit" disabled={loading} className="w-full py-3.5 rounded border border-[#B026FF]/50 bg-[#121317] hover:bg-[#B026FF]/10 hover:border-[#B026FF] text-white font-grotesk font-bold text-[13px] uppercase tracking-[2px] transition-all duration-300 disabled:opacity-50 shadow-[0_0_20px_rgba(176,38,255,0.1)]">
                     {loading ? "Processing..." : "Register"}
                   </button>
                 </form>
@@ -436,55 +533,62 @@ export default function Navbar() {
             {activeModal === "admin" && (
               <motion.div key="modal-admin" initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-[420px] bg-[#0a0a0c] border border-[#B026FF]/25 rounded-xl p-8 shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10 my-auto">
                 <button onClick={() => switchModal("none")} className="absolute top-4 right-4 text-white/40 hover:text-[#B026FF] transition-colors"><X size={20} /></button>
-                <button onClick={() => switchModal("login")} className="absolute top-4 left-4 text-white/40 hover:text-[#B026FF] transition-colors"><ArrowLeft size={20} /></button>
                 <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-[#B026FF]/30 rounded-tl-xl pointer-events-none" />
                 <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-[#B026FF]/30 rounded-br-xl pointer-events-none" />
                 <div className="flex flex-col items-center mb-6 mt-2">
                   <ShieldAlert size={48} className="mb-4 text-[#B026FF] drop-shadow-[0_0_15px_rgba(176,38,255,0.4)]" />
-                  {/* REVISI JUDUL MODAL JADI LOGIN ADMINISTRATOR */}
-                  <h2 className="text-white font-grotesk font-bold text-xl tracking-[4px] uppercase text-center leading-tight">LOGIN ADMINISTRATOR</h2>
+                  <h2 className="text-white font-grotesk font-bold text-xl tracking-[4px] uppercase text-center leading-tight">ADMINISTRATOR OVERRIDE</h2>
                 </div>
-
-                {errorMsg && (
-                  <div className="bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-[11px] text-center p-2.5 rounded mb-4 uppercase tracking-wide">
-                    {errorMsg}
-                  </div>
-                )}
 
                 <form onSubmit={handleAdminSubmit} className="flex flex-col gap-5">
                   <div>
-                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block">USERNAME / EMAIL</label>
+                    <label className={`font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block ${formErrors.adminId ? "text-[#FF3B30]" : "text-white/80"}`}>COMMANDER ID</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><User size={16} /></div>
-                      <input type="text" required value={adminId} onChange={(e) => setAdminId(e.target.value)} placeholder="Authorized Username / Email..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
+                      <input type="text" value={adminId} onChange={(e) => { setAdminId(e.target.value); clearFieldError("adminId"); }} placeholder="Authorized ID..." className={`w-full bg-[#121317] border rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.adminId ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
                     </div>
-                    {/* STATIS TANPA kedap-kedip */}
-                    {errorMsg && (
+                    <FieldError error={formErrors.adminId} />
+                    {!searchParams.get("auth") && !formErrors.adminId && (
                       <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide">
-                        💡 Example: <button type="button" onClick={() => setAdminId("rina.commander@majufleet.com")} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">rina.commander@majufleet.com</button> (Click to fill)
+                        💡 Example: <button type="button" onClick={() => { setAdminId("rina.commander@majufleet.com"); clearFieldError("adminId"); }} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">rina.commander@majufleet.com</button> (Click to fill)
                       </span>
                     )}
                   </div>
+
                   <div>
-                    <label className="text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block">PASSWORD</label>
+                    <label className={`font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block ${formErrors.adminKey ? "text-[#FF3B30]" : "text-white/80"}`}>MASTER KEY</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Lock size={16} /></div>
-                      <input type={showAdminPassword ? "text" : "password"} required value={adminKey} onChange={(e) => setAdminKey(e.target.value)} placeholder="Password Code..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
+                      <input type={showAdminPassword ? "text" : "password"} value={adminKey} onChange={(e) => { setAdminKey(e.target.value); clearFieldError("adminKey"); }} placeholder="Input clearance code..." className={`w-full bg-[#121317] border rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.adminKey ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
                       <button type="button" onClick={() => setShowAdminPassword(!showAdminPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
                         {showAdminPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
-                    {/* STATIS TANPA kedap-kedip */}
-                    {errorMsg && (
+                    <FieldError error={formErrors.adminKey} />
+                    {!searchParams.get("auth") && !formErrors.adminKey && (
                       <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide">
-                        💡 Example: <button type="button" onClick={() => { setAdminKey("MAJUADMIN2026"); setShowAdminPassword(true); }} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">MAJUADMIN2026</button> (Click to fill)
+                        💡 Example: <button type="button" onClick={() => { setAdminKey("MAJUADMIN2026"); setShowAdminPassword(true); clearFieldError("adminKey"); }} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">MAJUADMIN2026</button> (Click to fill)
                       </span>
                     )}
                   </div>
-                  <button type="submit" disabled={loading} className="w-full mt-3 py-3.5 rounded border border-[#B026FF]/50 bg-[#121317] hover:bg-[#B026FF]/10 hover:border-[#B026FF] text-white font-grotesk font-bold text-[13px] uppercase tracking-[2px] transition-all duration-300 disabled:opacity-50">
+
+                  {/* ✅ Banner Eror Taktis Sejajar Di Atas Tombol Submit */}
+                  {errorMsg && (
+                    <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="w-full bg-[#FF3B30]/5 border border-[#FF3B30]/20 p-4 rounded-lg flex items-center gap-3 text-left">
+                      <AlertCircle size={16} className="text-[#FF3B30] shrink-0" />
+                      <p className="text-[#FF3B30] text-[11px] font-mono font-bold uppercase tracking-[1.5px] leading-relaxed">{errorMsg}</p>
+                    </motion.div>
+                  )}
+
+                  <button type="submit" disabled={loading} className="w-full py-3.5 rounded border border-[#B026FF]/50 bg-[#121317] hover:bg-[#B026FF]/10 hover:border-[#B026FF] text-white font-grotesk font-bold text-[13px] uppercase tracking-[2px] transition-all duration-300 disabled:opacity-50 shadow-[0_0_20px_rgba(176,38,255,0.1)]">
                     {loading ? "Authenticating..." : "LOGIN"}
                   </button>
                 </form>
+                <div className="mt-6 flex flex-col items-center gap-3 font-inter text-[12px]">
+                  <button onClick={() => switchModal("login")} className="text-white/40 hover:text-[#BDF4FF] transition-colors uppercase tracking-[1px] text-[10px] font-grotesk mt-1 flex items-center gap-1">
+                    ← RETURN TO CREW LOGIN
+                  </button>
+                </div>
               </motion.div>
             )}
           </div>
