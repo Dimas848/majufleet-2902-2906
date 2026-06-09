@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react"; // ✅ 1. Import Suspense dari React
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
@@ -21,7 +22,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen flex flex-col bg-bg-dark">
-        <Navbar />
+        {/* ✅ 2. Bungkus Navbar dengan Suspense boundary agar sukses build di Vercel */}
+        <Suspense fallback={null}>
+          <Navbar />
+        </Suspense>
+        
         <main className="flex-1">{children}</main> 
         <Footer />
       </body>
