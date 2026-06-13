@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CreditCard, CheckCircle2, FileText, XCircle, AlertCircle } from "lucide-react";
+import { CreditCard, CheckCircle2, FileText, XCircle, AlertCircle, X, Trash } from "lucide-react";
 import UserNavbar from "@/components/usernavbar";
-// Import Server Actions resmi dari backend actions.ts
+// Import official Server Actions from backend actions.ts
 import { getCustomerBilling, confirmInvoicePayment, getCurrentSession, cancelShipmentCustomer } from "@/app/lib/actions";
 
 function BillingHistorySkeleton() {
@@ -66,6 +66,28 @@ export default function BillingHistoryPage() {
   const [showInvoiceDetail, setShowInvoiceDetail] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
+  // ✅ STATE BARU: Custom Toast System
+  const [toast, setToast] = useState<{ type: "success" | "error"; title: string; message: string } | null>(null);
+
+  // ✅ STATE BARU: Custom Cancel Confirmation Modal
+  const [cancelModal, setCancelModal] = useState<{ isOpen: boolean; invoiceId: number | null; shipmentId: number | null }>({
+    isOpen: false,
+    invoiceId: null,
+    shipmentId: null
+  });
+
+  // Auto-dismiss toast system after 4 seconds
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  const showNotification = (type: "success" | "error", title: string, message: string) => {
+    setToast({ type, title, message });
+  };
+
   useEffect(() => {
     async function loadBillingData() {
       try {
@@ -78,7 +100,8 @@ export default function BillingHistoryPage() {
           }
         }
       } catch (error) {
-        console.error("Gagal sinkronisasi data finansial:", error);
+        console.error("Financial data sync error:", error);
+        showNotification("error", "SYNC ERROR", "Failed to compile latest financial stream records.");
       } finally {
         setIsLoading(false);
       }
@@ -86,7 +109,7 @@ export default function BillingHistoryPage() {
     loadBillingData();
   }, []);
 
-  // Handler eksekusi konfirmasi pembayaran langsung ke Neon DB
+  // Handler for secure instant payment confirmation
   const handlePayment = async () => {
     if (!selectedInvoice) return;
     setIsSubmitting(true);
@@ -94,46 +117,62 @@ export default function BillingHistoryPage() {
     try {
       const res = await confirmInvoicePayment(selectedInvoice.id, selectedInvoice.shipmentId);
       if (res.success) {
-        alert("PAYMENT TRANSACTION CONFIRMED: Status armada diperbarui.");
+        showNotification("success", "PAYMENT CONFIRMED", "Transaction validated successfully. Fleet deployment protocol initialized.");
         setShowInvoiceDetail(false);
-        window.location.reload(); // Refresh data halaman secara instan
+        // Gives 1.5s for user to look at the beautiful success toast notification before page reload
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
       } else {
-        alert("Gagal memproses konfirmasi pembayaran. Silakan coba kembali.");
+        showNotification("error", "PAYMENT REFUSED", "System rejected invoice clearance validation token.");
       }
     } catch (error) {
       console.error(error);
-      alert("Terjadi gangguan jaringan siber ke server.");
+      showNotification("error", "NETWORK FAULT", "Cyberconnection timeout while reaching Neon payment core server.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Handler penghapusan manifest kargo dari database
-  const handleCancelBooking = async () => {
+  // Triggers the custom cancellation verification modal layout sequence
+  const handleCancelBookingClick = () => {
     if (!selectedInvoice) return;
+    setCancelModal({
+      isOpen: true,
+      invoiceId: selectedInvoice.id,
+      shipmentId: selectedInvoice.shipmentId
+    });
+  };
 
-    const confirmCancel = window.confirm("Apakah Anda yakin ingin membatalkan dan menghapus permanen pesanan pengiriman ini?");
-    if (!confirmCancel) return;
+  // Executes actual permanent record deletion pipeline inside database node
+  const executeCancelBooking = async () => {
+    if (!cancelModal.invoiceId || !cancelModal.shipmentId) return;
 
+    const currentInvoiceId = cancelModal.invoiceId;
+    const currentShipmentId = cancelModal.shipmentId;
+
+    setCancelModal({ isOpen: false, invoiceId: null, shipmentId: null });
     setIsSubmitting(true);
+    
     try {
-      const res = await cancelShipmentCustomer(selectedInvoice.id, selectedInvoice.shipmentId);
+      const res = await cancelShipmentCustomer(currentInvoiceId, currentShipmentId);
       if (res.success) {
-        alert(res.message);
+        showNotification("success", "MANIFEST PURGED", "Shipment manifest order sequence canceled and wiped permanently.");
         setShowInvoiceDetail(false);
-        window.location.reload(); // Refresh halaman agar tabel langsung terupdate
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
       } else {
-        alert(res.message);
+        showNotification("error", "CANCELLATION FAULT", res.message || "Database terminal rejected the termination command packet.");
       }
     } catch (error) {
       console.error(error);
-      alert("Gagal menghubungi server.");
+      showNotification("error", "CONNECTION FAULT", "Pipeline terminal connection broken.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Helper pemformatan uang Rupiah agar rapi di UI
   const formatCurrency = (value: number) => {
     return "Rp " + value.toLocaleString("id-ID");
   };
@@ -142,6 +181,90 @@ export default function BillingHistoryPage() {
     <div className="min-h-screen bg-[#0a0a0c] flex flex-col relative overflow-x-hidden">
       
       <UserNavbar />
+
+      {/* === CUSTOM TOAST NOTIFICATION COMPONENT AREA === */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -40, x: "-50%" }}
+            animate={{ opacity: 1, y: 0, x: "-50%" }}
+            exit={{ opacity: 0, y: -20, x: "-50%" }}
+            className="fixed top-24 left-1/2 z-[99999] w-full max-w-[420px] bg-[#0c0d12]/95 backdrop-blur-md border rounded-xl p-5 shadow-2xl flex items-start gap-4 overflow-hidden"
+            style={{
+              borderColor: toast.type === "success" ? "rgba(52, 199, 89, 0.3)" : "rgba(255, 59, 48, 0.3)",
+              boxShadow: toast.type === "success" ? "0 0 40px rgba(52, 199, 89, 0.2)" : "0 0 40px rgba(255, 59, 48, 0.2)"
+            }}
+          >
+            <div className={`absolute top-0 left-0 w-full h-[3px] ${toast.type === "success" ? "bg-[#34C759]" : "bg-[#FF3B30]"}`} />
+            <div className="mt-0.5 shrink-0">
+              {toast.type === "success" ? <CheckCircle2 size={22} className="text-[#34C759]" /> : <AlertCircle size={22} className="text-[#FF3B30]" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-mono text-[11px] font-bold tracking-[3px] uppercase mb-1" style={{ color: toast.type === "success" ? "#34C759" : "#FF3B30" }}>
+                {toast.title}
+              </h4>
+              <p className="text-white/80 font-inter text-[13px] leading-relaxed">{toast.message}</p>
+            </div>
+            <button onClick={() => setToast(null)} className="text-white/30 hover:text-white transition-colors shrink-0 p-0.5 rounded hover:bg-white/5"><X size={16} /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* === CUSTOM DESTRUCTIVE CANCELLATION MODAL CENTER === */}
+      <AnimatePresence>
+        {cancelModal.isOpen && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center px-4">
+            <motion.div 
+              initial={{ opacity: 0 }} 
+              animate={{ opacity: 1 }} 
+              exit={{ opacity: 0 }} 
+              onClick={() => setCancelModal({ isOpen: false, invoiceId: null, shipmentId: null })}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer" 
+            />
+            
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 15 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.9, y: 15 }}
+              className="relative w-full max-w-[440px] bg-[#0c0d12] border border-[#FF3B30]/30 rounded-xl p-8 shadow-[0_0_50px_rgba(255,59,48,0.15)] overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-[4px] bg-[#FF3B30]" />
+              
+              <div className="flex flex-col items-center text-center">
+                <div className="w-12 h-12 rounded-full bg-[#FF3B30]/10 border border-[#FF3B30]/20 flex items-center justify-center text-[#FF3B30] mb-5 shadow-[0_0_15px_rgba(255,59,48,0.1)]">
+                  <Trash size={22} />
+                </div>
+                
+                <h3 className="font-grotesk font-bold text-white text-xl tracking-[1px] uppercase mb-2">ABORT FREIGHT SHIPMENT</h3>
+                <p className="text-[#FF3B30]/80 font-mono text-[10px] tracking-[2px] uppercase mb-4 font-bold">
+                  MANIFEST TERMINATION SEQUENCING
+                </p>
+                
+                <p className="text-white/60 font-inter text-[13px] leading-relaxed mb-8">
+                  Are you absolutely certain you want to cancel and permanently delete this shipment booking request sequence? This operational command packet is irreversible.
+                </p>
+                
+                <div className="flex gap-4 w-full">
+                  <button 
+                    type="button" 
+                    onClick={() => setCancelModal({ isOpen: false, invoiceId: null, shipmentId: null })}
+                    className="flex-1 py-3 border border-white/10 rounded text-white/60 hover:text-white hover:bg-white/5 font-mono text-[11px] font-bold tracking-[2px] uppercase transition-colors"
+                  >
+                    ABORT
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={executeCancelBooking}
+                    className="flex-1 py-3 bg-[#FF3B30]/10 border border-[#FF3B30]/40 text-[#FF3B30] rounded font-mono text-[11px] font-bold tracking-[2px] uppercase hover:bg-[#FF3B30] hover:text-white shadow-[0_0_15px_rgba(255,59,48,0.2)] transition-all"
+                  >
+                    CONFIRM CANCEL
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {isLoading ? (
         <BillingHistorySkeleton />
@@ -157,7 +280,7 @@ export default function BillingHistoryPage() {
                 <p className="text-white/50 font-inter text-[14px]">Manage your pending invoices and view transaction logs for all deployments.</p>
               </div>
 
-              {/* Tampilan Ringkasan Finansial Dinamis Terintegrasi Database */}
+              {/* Financial Summaries Cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
                 <div className="bg-[#121317] border border-[#B026FF]/20 rounded-xl p-6">
                   <p className="text-white/40 font-grotesk text-[10px] uppercase tracking-[2px] mb-2">Total Unpaid Amount</p>
@@ -235,6 +358,7 @@ export default function BillingHistoryPage() {
         </main>
       )}
 
+      {/* Invoice Details Sliding UI Overlay Popover */}
       <AnimatePresence>
         {showInvoiceDetail && selectedInvoice && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-10">
@@ -277,13 +401,13 @@ export default function BillingHistoryPage() {
                   <div className="bg-orange-500/5 border border-orange-500/20 p-4 rounded-lg flex gap-3">
                     <AlertCircle size={20} className="text-orange-500 shrink-0" />
                     <p className="text-[11px] text-orange-500/80 leading-relaxed uppercase tracking-wider">
-                      Make payment to the Maju Fleet account to process your cargo delivery to the next stage..
+                      Make payment to the Maju Fleet account to process your cargo delivery to the next stage.
                     </p>
                   </div>
                   
-                  {/* 💡 SINKRONISASI BARU: Tombol Pembatalan Manifest Kargo Permanen dari Database Neon */}
+                  {/* Custom Cancel Sequence button linked directly with custom verification window */}
                   <button 
-                    onClick={handleCancelBooking}
+                    onClick={handleCancelBookingClick}
                     disabled={isSubmitting}
                     className="w-full bg-transparent border border-red-500/40 hover:bg-red-500/10 text-red-400 py-3.5 rounded-lg font-grotesk font-bold text-[12px] uppercase tracking-[2px] transition-all disabled:opacity-30"
                   >

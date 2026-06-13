@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Package, MapPin, Weight, Ruler, Calendar, ShieldCheck, Box, Send, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Package, MapPin, Weight, Ruler, Calendar, ShieldCheck, Box, Send, AlertCircle, ChevronLeft, ChevronRight, Phone, User, Mail } from "lucide-react";
 import UserNavbar from "@/components/usernavbar";
 import { bookShipmentCustomer, getCurrentSession } from "@/app/lib/actions";
 
@@ -45,6 +45,12 @@ export default function BookShipmentPage() {
   const [success, setSuccess] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [todayDate, setTodayDate] = useState("");
+
+  const [senderContact, setSenderContact] = useState("");
+  const [recipientContact, setRecipientContact] = useState("");
+  
+  // ✅ STATE BARU: Untuk melacak kategori kargo yang dipilih pelanggan
+  const [selectedCategory, setSelectedCategory] = useState("");
 
   // STATE KALENDER KUSTOM
   const [selectedDate, setSelectedDate] = useState(""); 
@@ -99,21 +105,84 @@ export default function BookShipmentPage() {
 
     const packageType = formData.get("packageType") as string;
     const shippingDate = formData.get("shippingDate") as string; 
+    
+    // Data Pengirim (Sender)
+    const senderName = formData.get("senderName") as string;
+    const senderEmail = formData.get("senderEmail") as string;
+    const senderAddress = formData.get("senderAddress") as string;
+    const senderCountry = formData.get("senderCountry") as string;
     const senderCity = formData.get("senderCity") as string;
+
+    // Data Penerima (Recipient)
+    const recipientName = formData.get("recipientName") as string;
+    const recipientEmail = formData.get("recipientEmail") as string;
+    const recipientAddress = formData.get("recipientAddress") as string;
+    const recipientCountry = formData.get("recipientCountry") as string;
     const recipientCity = formData.get("recipientCity") as string;
+
+    // Data Kargo
     const cargoDesc = formData.get("cargoDesc") as string;
     const category = formData.get("category") as string;
+    const customCategory = formData.get("customCategory") as string; // ✅ Ambil input kustom jika ada
     const weight = parseFloat(formData.get("weight") as string) || 0;
     const length = parseFloat(formData.get("length") as string) || 0;
     const width = parseFloat(formData.get("width") as string) || 0;
     const height = parseFloat(formData.get("height") as string) || 0;
 
+    // VALIDASI SECTION 1
     if (!packageType) newErrors.packageType = "Please select a freight service plan.";
     if (!shippingDate) newErrors.shippingDate = "Please select a preferred shipping date.";
-    if (!senderCity.trim()) newErrors.senderCity = "Please enter an origin location or port.";
-    if (!recipientCity.trim()) newErrors.recipientCity = "Please enter a destination location or port.";
+    
+    // VALIDASI SECTION 2: SENDER
+    if (!senderName.trim()) newErrors.senderName = "Please enter sender's full name.";
+    if (!senderContact.trim()) {
+      newErrors.senderContact = "Please enter sender's contact number.";
+    } else if (senderContact.trim().length < 3) {
+      newErrors.senderContact = "Sender contact must be at least 3 digits.";
+    }
+    if (!senderEmail.trim()) {
+      newErrors.senderEmail = "Please enter sender's email address.";
+    } else if (!senderEmail.includes("@")) {
+      newErrors.senderEmail = "Email address must contain an '@' symbol.";
+    }
+    if (!senderAddress.trim()) newErrors.senderAddress = "Please enter sender's full address.";
+    if (!senderCountry.trim()) newErrors.senderCountry = "Please enter origin country.";
+    if (!senderCity.trim()) {
+      newErrors.senderCity = "Please enter an origin city or port.";
+    } else if (senderCity.trim().length < 3) {
+      newErrors.senderCity = "Origin city must be at least 3 characters.";
+    }
+
+    // VALIDASI SECTION 3: RECIPIENT
+    if (!recipientName.trim()) newErrors.recipientName = "Please enter recipient's full name.";
+    if (!recipientContact.trim()) {
+      newErrors.recipientContact = "Please enter recipient's contact number.";
+    } else if (recipientContact.trim().length < 3) {
+      newErrors.recipientContact = "Recipient contact must be at least 3 digits.";
+    }
+    if (!recipientEmail.trim()) {
+      newErrors.recipientEmail = "Please enter recipient's email address.";
+    } else if (!recipientEmail.includes("@")) {
+      newErrors.recipientEmail = "Email address must contain an '@' symbol.";
+    }
+    if (!recipientAddress.trim()) newErrors.recipientAddress = "Please enter destination full address.";
+    if (!recipientCountry.trim()) newErrors.recipientCountry = "Please enter destination country.";
+    if (!recipientCity.trim()) {
+      newErrors.recipientCity = "Please enter a destination city or port.";
+    } else if (recipientCity.trim().length < 3) {
+      newErrors.recipientCity = "Destination city must be at least 3 characters.";
+    }
+
+    // VALIDASI SECTION 4: CARGO
     if (!cargoDesc.trim()) newErrors.cargoDesc = "Please enter a description for the cargo.";
-    if (!category) newErrors.category = "Please select a cargo category.";
+    
+    // ✅ REVISI VALIDASI: Jika pilih "other", pastikan kolom input ketik sendiri tidak kosong
+    if (!category) {
+      newErrors.category = "Please select a cargo category.";
+    } else if (category === "other" && !customCategory.trim()) {
+      newErrors.customCategory = "Please specify your custom cargo category.";
+    }
+
     if (weight <= 0) newErrors.weight = "Please enter a weight greater than 0.";
     if (length <= 0) newErrors.length = "Length must be greater than 0m.";
     if (width <= 0) newErrors.width = "Width must be greater than 0m.";
@@ -129,7 +198,7 @@ export default function BookShipmentPage() {
     try {
       const session = await getCurrentSession();
       if (!session) {
-        alert("Sesi otentikasi habis. Silakan melakukan login kembali.");
+        alert("Authentication session expired. Please log in again.");
         router.push("/login");
         return;
       }
@@ -138,13 +207,29 @@ export default function BookShipmentPage() {
       const weightUnit = formData.get("weightUnit") as string;
       const weightInKg = weightUnit === "tons" ? weight * 1000 : weight;
 
+      // ✅ REVISI LOGIKA: Tentukan kategori akhir yang akan dikirim ke Neon DB
+      const finalCategory = category === "other" ? customCategory.trim() : category;
+
       const payload = {
         userId: session.id,
         packageTypeString: packageType,
-        senderCity: senderCity,
-        recipientCity: recipientCity,
-        cargoDesc: cargoDesc,
-        category: category,
+        
+        senderName,
+        senderContact,
+        senderEmail,
+        senderAddress,
+        senderCountry,
+        senderCity,
+
+        recipientName,
+        recipientContact,
+        recipientEmail,
+        recipientAddress,
+        recipientCountry,
+        recipientCity,
+
+        cargoDesc,
+        category: finalCategory, // ✅ Mengirimkan string ketikan manual dari pelanggan
         weight: weightInKg,
         dimensions: calculatedVolume
       };
@@ -156,15 +241,18 @@ export default function BookShipmentPage() {
         setTimeout(() => {
           setSuccess(false);
           setSelectedDate("");
+          setSenderContact("");
+          setRecipientContact("");
+          setSelectedCategory("");
           currentFormElement.reset();
           router.push("/dashboard/billing");
         }, 2000);
       } else {
-        alert("Gagal memproses data booking: " + res.message);
+        alert("Failed to process booking payload stream: " + res.message);
       }
     } catch (error) {
-      console.error("Critical error inside form component:", error);
-      alert("Terjadi kegagalan komunikasi sistem ke server.");
+      console.error("Critical error inside form component node:", error);
+      alert("System connection terminal failure.");
     } finally {
       setLoading(false);
     }
@@ -213,9 +301,10 @@ export default function BookShipmentPage() {
                 </p>
               </div>
 
-              <form onSubmit={handleBooking} noValidate className="bg-[#121317]/80 backdrop-blur-sm border border-white/10 rounded-xl p-6 md:p-10 shadow-2xl">
+              <form onSubmit={handleBooking} noValidate className="bg-[#121317]/80 backdrop-blur-sm border border-white/10 rounded-xl p-6 md:p-10 shadow-2xl flex flex-col gap-10">
                 
-                <div className="mb-10">
+                {/* 1. SERVICE SELECTION */}
+                <div>
                   <h3 className="text-white flex items-center gap-2 font-grotesk text-[14px] uppercase tracking-[2px] mb-6 pb-2 border-b border-white/10">
                     <Box size={16} className="text-[#B026FF]" /> 1. Service Selection
                   </h3>
@@ -236,7 +325,6 @@ export default function BookShipmentPage() {
                       <ErrorMessage message={errors.packageType} />
                     </div>
                     
-                    {/* KALENDER KUSTOM DENGAN SELECT DROPDOWN BULAN & TAHUN */}
                     <div className="relative" ref={calendarRef}>
                       <label className={labelClass}>Preferred Shipping Date</label>
                       <div 
@@ -246,97 +334,35 @@ export default function BookShipmentPage() {
                         <Calendar size={16} className={iconClass} />
                         {formatDisplayDate(selectedDate)}
                       </div>
-                      
                       <input type="hidden" name="shippingDate" value={selectedDate} />
                       <ErrorMessage message={errors.shippingDate} />
 
-                      {/* Floating UI Kalender */}
                       <AnimatePresence>
                         {showCalendar && (
-                          <motion.div 
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: 10 }}
-                            className="absolute z-50 mt-2 w-[330px] bg-[#0d0d11] border border-white/10 rounded-xl p-4 shadow-2xl right-0 md:left-0 text-white"
-                          >
-                            {/* Header Navigasi Menggunakan Pilihan Dropdown Drop-select */}
+                          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="absolute z-50 mt-2 w-[330px] bg-[#0d0d11] border border-white/10 rounded-xl p-4 shadow-2xl right-0 md:left-0 text-white">
                             <div className="flex justify-between items-center mb-4 gap-2">
-                              <button 
-                                type="button"
-                                onClick={() => setCurrentMonth(new Date(year, month - 1, 1))}
-                                className="p-1 hover:bg-white/5 rounded text-white/60 hover:text-white transition-colors shrink-0"
-                              >
-                                <ChevronLeft size={16} />
-                              </button>
-                              
-                              {/* 💡 UPDATE TERBARU: Dropdown Seleksi Bulan & Tahun */}
+                              <button type="button" onClick={() => setCurrentMonth(new Date(year, month - 1, 1))} className="p-1 hover:bg-white/5 rounded text-white/60 hover:text-white transition-colors shrink-0"><ChevronLeft size={16} /></button>
                               <div className="flex items-center gap-1.5 flex-1 justify-center">
-                                {/* Pilihan Bulan */}
-                                <select 
-                                  value={month} 
-                                  onChange={(e) => setCurrentMonth(new Date(year, parseInt(e.target.value), 1))}
-                                  className="bg-[#121317] text-white border border-white/10 rounded px-2 py-1 font-grotesk text-xs uppercase cursor-pointer focus:outline-none focus:border-[#B026FF] appearance-none text-center"
-                                >
-                                  {monthNames.map((mName, idx) => (
-                                    <option key={mName} value={idx} className="bg-[#0d0d11]">{mName.substring(0, 3)}</option>
-                                  ))}
+                                <select value={month} onChange={(e) => setCurrentMonth(new Date(year, parseInt(e.target.value), 1))} className="bg-[#121317] text-white border border-white/10 rounded px-2 py-1 font-grotesk text-xs uppercase cursor-pointer focus:outline-none focus:border-[#B026FF] appearance-none text-center">
+                                  {monthNames.map((mName, idx) => (<option key={mName} value={idx} className="bg-[#0d0d11]">{mName.substring(0, 3)}</option>))}
                                 </select>
-
-                                {/* Pilihan Tahun (Menyediakan opsi tahun ini hingga +5 tahun ke depan) */}
-                                <select 
-                                  value={year} 
-                                  onChange={(e) => setCurrentMonth(new Date(parseInt(e.target.value), month, 1))}
-                                  className="bg-[#121317] text-white border border-white/10 rounded px-2 py-1 font-grotesk text-xs cursor-pointer focus:outline-none focus:border-[#B026FF] appearance-none text-center"
-                                >
-                                  {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() + i).map((y) => (
-                                    <option key={y} value={y} className="bg-[#0d0d11]">{y}</option>
-                                  ))}
+                                <select value={year} onChange={(e) => setCurrentMonth(new Date(parseInt(e.target.value), month, 1))} className="bg-[#121317] text-white border border-white/10 rounded px-2 py-1 font-grotesk text-xs cursor-pointer focus:outline-none focus:border-[#B026FF] appearance-none text-center">
+                                  {Array.from({ length: 6 }, (_, i) => new Date().getFullYear() + i).map((y) => (<option key={y} value={y} className="bg-[#0d0d11]">{y}</option>))}
                                 </select>
                               </div>
-
-                              <button 
-                                type="button"
-                                onClick={() => setCurrentMonth(new Date(year, month + 1, 1))}
-                                className="p-1 hover:bg-white/5 rounded text-white/60 hover:text-white transition-colors shrink-0"
-                              >
-                                <ChevronRight size={16} />
-                              </button>
+                              <button type="button" onClick={() => setCurrentMonth(new Date(year, month + 1, 1))} className="p-1 hover:bg-white/5 rounded text-white/60 hover:text-white transition-colors shrink-0"><ChevronRight size={16} /></button>
                             </div>
-
-                            {/* Nama-Nama Hari */}
                             <div className="grid grid-cols-7 text-center gap-1 mb-2">
-                              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((dayName) => (
-                                <span key={dayName} className="text-white/30 font-mono text-[11px] font-bold uppercase">{dayName}</span>
-                              ))}
+                              {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((dayName) => (<span key={dayName} className="text-white/30 font-mono text-[11px] font-bold uppercase">{dayName}</span>))}
                             </div>
-
-                            {/* Grid Angka Hari Tanpa Trailing Angka Bulan Depan */}
                             <div className="grid grid-cols-7 text-center gap-1 text-[12px] font-inter">
-                              {blanks.map((_, idx) => (
-                                <div key={`blank-start-${idx}`} className="h-8" />
-                              ))}
-
+                              {blanks.map((_, idx) => (<div key={`blank-start-${idx}`} className="h-8" />))}
                               {daysInMonth.map((day) => {
                                 const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                                 const isPast = dateStr < todayDate;
                                 const isSelected = selectedDate === dateStr;
-
                                 return (
-                                  <button
-                                    key={day}
-                                    type="button"
-                                    disabled={isPast}
-                                    onClick={() => {
-                                      setSelectedDate(dateStr);
-                                      setShowCalendar(false);
-                                    }}
-                                    className={`h-8 w-8 mx-auto rounded flex items-center justify-center font-mono transition-all
-                                      ${isPast ? "text-white/10 cursor-not-allowed" : "text-white/80 hover:bg-[#B026FF]/20 hover:text-white"}
-                                      ${isSelected ? "!bg-[#B026FF] !text-white font-bold shadow-[0_0_10px_rgba(176,38,255,0.5)]" : ""}
-                                    `}
-                                  >
-                                    {day}
-                                  </button>
+                                  <button key={day} type="button" disabled={isPast} onClick={() => { setSelectedDate(dateStr); setShowCalendar(false); }} className={`h-8 w-8 mx-auto rounded flex items-center justify-center font-mono transition-all ${isPast ? "text-white/10 cursor-not-allowed" : "text-white/80 hover:bg-[#B026FF]/20 hover:text-white"} ${isSelected ? "!bg-[#B026FF] !text-white font-bold shadow-[0_0_10px_rgba(176,38,255,0.5)]" : ""}`}>{day}</button>
                                 );
                               })}
                             </div>
@@ -347,58 +373,149 @@ export default function BookShipmentPage() {
                   </div>
                 </div>
 
-                <div className="mb-10">
+                {/* 2. SENDER INFORMATION */}
+                <div>
                   <h3 className="text-white flex items-center gap-2 font-grotesk text-[14px] uppercase tracking-[2px] mb-6 pb-2 border-b border-white/10">
-                    <MapPin size={16} className="text-[#B026FF]" /> 2. Shipping Route
+                    <User size={16} className="text-[#B026FF]" /> 2. Sender Information
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className={labelClass}>Origin (Pickup Location/Port)</label>
-                      <div className="relative">
-                        <MapPin size={16} className={iconClass} />
-                        <input name="senderCity" type="text" placeholder="e.g. Jakarta, Indonesia" className={`${inputClass} pl-10 ${errors.senderCity ? "border-red-500/50" : ""}`} />
-                      </div>
-                      <ErrorMessage message={errors.senderCity} />
+                      <label className={labelClass}>Sender Full Name</label>
+                      <div className="relative"><User size={16} className={iconClass} /><input name="senderName" type="text" placeholder="Your name / Company name" className={inputClass} /></div>
+                      <ErrorMessage message={errors.senderName} />
                     </div>
                     <div>
-                      <label className={labelClass}>Destination (Drop-off Location/Port)</label>
+                      <label className={labelClass}>Sender Contact Number</label>
                       <div className="relative">
-                        <MapPin size={16} className={`${iconClass} text-[#BDF4FF]`} />
-                        <input name="recipientCity" type="text" placeholder="e.g. Singapore Port" className={`${inputClass} pl-10 ${errors.recipientCity ? "border-red-500/50" : ""}`} />
+                        <Phone size={16} className={iconClass} />
+                        <input name="senderContact" type="text" value={senderContact} onChange={(e) => setSenderContact(e.target.value.replace(/\D/g, ""))} placeholder="Digits only (e.g. 0812345)" className={inputClass} />
                       </div>
+                      <ErrorMessage message={errors.senderContact} />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className={labelClass}>Sender Email Address</label>
+                      <div className="relative"><Mail size={16} className={iconClass} /><input name="senderEmail" type="email" placeholder="sender@example.com" className={inputClass} /></div>
+                      <ErrorMessage message={errors.senderEmail} />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className={labelClass}>Sender Full Address</label>
+                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="senderAddress" type="text" placeholder="Detailed origin warehouse address..." className={inputClass} /></div>
+                      <ErrorMessage message={errors.senderAddress} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Origin Country</label>
+                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="senderCountry" type="text" placeholder="e.g. Indonesia" className={inputClass} /></div>
+                      <ErrorMessage message={errors.senderCountry} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Origin City / Port</label>
+                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="senderCity" type="text" placeholder="e.g. Jakarta" className={inputClass} /></div>
+                      <ErrorMessage message={errors.senderCity} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. RECIPIENT INFORMATION */}
+                <div>
+                  <h3 className="text-white flex items-center gap-2 font-grotesk text-[14px] uppercase tracking-[2px] mb-6 pb-2 border-b border-white/10">
+                    <MapPin size={16} className="text-[#BDF4FF]" /> 3. Recipient Information
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className={labelClass}>Recipient Full Name</label>
+                      <div className="relative"><User size={16} className={iconClass} /><input name="recipientName" type="text" placeholder="Recipient name / Client company" className={inputClass} /></div>
+                      <ErrorMessage message={errors.recipientName} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Recipient Contact Number</label>
+                      <div className="relative">
+                        <Phone size={16} className={iconClass} />
+                        <input name="recipientContact" type="text" value={recipientContact} onChange={(e) => setRecipientContact(e.target.value.replace(/\D/g, ""))} placeholder="Digits only (e.g. 0876543)" className={inputClass} />
+                      </div>
+                      <ErrorMessage message={errors.recipientContact} />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className={labelClass}>Recipient Email Address</label>
+                      <div className="relative"><Mail size={16} className={iconClass} /><input name="recipientEmail" type="email" placeholder="recipient@example.com" className={inputClass} /></div>
+                      <ErrorMessage message={errors.recipientEmail} />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className={labelClass}>Recipient Full Address</label>
+                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="recipientAddress" type="text" placeholder="Detailed drop-off destination address..." className={inputClass} /></div>
+                      <ErrorMessage message={errors.recipientAddress} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Destination Country</label>
+                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="recipientCountry" type="text" placeholder="e.g. Singapore" className={inputClass} /></div>
+                      <ErrorMessage message={errors.recipientCountry} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Destination City / Port</label>
+                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="recipientCity" type="text" placeholder="e.g. Singapore Port" className={inputClass} /></div>
                       <ErrorMessage message={errors.recipientCity} />
                     </div>
                   </div>
                 </div>
 
-                <div className="mb-10">
+                {/* 4. CARGO DETAILS */}
+                <div>
                   <h3 className="text-white flex items-center gap-2 font-grotesk text-[14px] uppercase tracking-[2px] mb-6 pb-2 border-b border-white/10">
-                    <Package size={16} className="text-[#B026FF]" /> 3. Cargo Details
+                    <Package size={16} className="text-[#B026FF]" /> 4. Cargo Details
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
                       <label className={labelClass}>Cargo Description</label>
-                      <div className="relative">
-                        <Package size={16} className={iconClass} />
-                        <input name="cargoDesc" type="text" placeholder="What are you shipping?" className={`${inputClass} pl-10 ${errors.cargoDesc ? "border-red-500/50" : ""}`} />
-                      </div>
+                      <div className="relative"><Package size={16} className={iconClass} /><input name="cargoDesc" type="text" placeholder="What are you shipping?" className={inputClass} /></div>
                       <ErrorMessage message={errors.cargoDesc} />
                     </div>
+                    
+                    {/* ✅ REVISI: Mengubah Select Menjadi Controlled Input via State */}
                     <div>
                       <label className={labelClass}>Cargo Type</label>
                       <div className="relative">
-                        <select name="category" defaultValue="" className={`${inputClass} px-4 appearance-none ${errors.category ? "border-red-500/50" : ""}`}>
+                        <select 
+                          name="category" 
+                          value={selectedCategory} 
+                          onChange={(e) => setSelectedCategory(e.target.value)} 
+                          className={`${inputClass} px-4 appearance-none ${errors.category ? "border-red-500/50" : ""}`}
+                        >
                           <option value="" disabled>Select cargo category...</option>
                           <option value="general">General Goods (Dry)</option>
                           <option value="hazardous">Hazardous / Chemicals</option>
                           <option value="perishable">Perishable (Needs Cold Storage)</option>
                           <option value="fragile">Fragile / Electronics</option>
                           <option value="oversized">Oversized Machinery</option>
+                          <option value="other">Other (Specify...)</option> {/* ✅ Opsi baru */}
                         </select>
                       </div>
                       <ErrorMessage message={errors.category} />
                     </div>
                   </div>
+
+                  {/* ✅ ELEMEN BARU: Field Ketik Sendiri yang muncul dinamis jika pilih "other" */}
+                  <AnimatePresence>
+                    {selectedCategory === "other" && (
+                      <motion.div 
+                        initial={{ opacity: 0, height: 0 }} 
+                        animate={{ opacity: 1, height: "auto" }} 
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="mb-6 overflow-hidden"
+                      >
+                        <label className={labelClass}>Specify Custom Cargo Category</label>
+                        <div className="relative">
+                          <Package size={16} className={iconClass} />
+                          <input 
+                            name="customCategory" 
+                            type="text" 
+                            placeholder="e.g. Vehicles, Plastic Materials, Furniture, etc." 
+                            className={inputClass} 
+                          />
+                        </div>
+                        <ErrorMessage message={errors.customCategory} />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                     <div className="md:col-span-1">
@@ -418,26 +535,17 @@ export default function BookShipmentPage() {
                     <div className="md:col-span-3 grid grid-cols-3 gap-4">
                       <div>
                         <label className={labelClass}>Length (m)</label>
-                        <div className="relative">
-                          <Ruler size={16} className={iconClass} />
-                          <input name="length" type="number" placeholder="L" className={`${inputClass} pl-10 ${errors.length ? "border-red-500/50" : ""}`} />
-                        </div>
+                        <div className="relative"><Ruler size={16} className={iconClass} /><input name="length" type="number" placeholder="L" className={inputClass} /></div>
                         <ErrorMessage message={errors.length} />
                       </div>
                       <div>
                         <label className={labelClass}>Width (m)</label>
-                        <div className="relative">
-                          <Ruler size={16} className={iconClass} />
-                          <input name="width" type="number" placeholder="W" className={`${inputClass} pl-10 ${errors.width ? "border-red-500/50" : ""}`} />
-                        </div>
+                        <div className="relative"><Ruler size={16} className={iconClass} /><input name="width" type="number" placeholder="W" className={inputClass} /></div>
                         <ErrorMessage message={errors.width} />
                       </div>
                       <div>
                         <label className={labelClass}>Height (m)</label>
-                        <div className="relative">
-                          <Ruler size={16} className={iconClass} />
-                          <input name="height" type="number" placeholder="H" className={`${inputClass} pl-10 ${errors.height ? "border-red-500/50" : ""}`} />
-                        </div>
+                        <div className="relative"><Ruler size={16} className={iconClass} /><input name="height" type="number" placeholder="H" className={inputClass} /></div>
                         <ErrorMessage message={errors.height} />
                       </div>
                     </div>
@@ -460,13 +568,7 @@ export default function BookShipmentPage() {
                       background: success ? "#10B981" : loading ? "#7a1aaa" : "linear-gradient(90deg, #B026FF, #4E0078)",
                     }}
                   >
-                    {loading ? (
-                      <span className="flex items-center gap-2">Processing Booking...</span>
-                    ) : success ? (
-                      <span className="flex items-center gap-2">Booking Confirmed!</span>
-                    ) : (
-                      <span className="flex items-center gap-2">Submit Request <Send size={16} /></span>
-                    )}
+                    {loading ? "Processing Booking..." : success ? "Booking Confirmed!" : <span className="flex items-center gap-2">Submit Request <Send size={16} /></span>}
                   </button>
                 </div>
               </form>

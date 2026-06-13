@@ -171,7 +171,14 @@ function AdminControlContent() {
       if (!formData.captain) errors.captain = "Please select a captain on board.";
       
       if (!formData.senderName) errors.senderName = "Please enter sender's name.";
-      if (!formData.senderContact) errors.senderContact = "Please enter sender's contact.";
+      
+      // Validasi Sender Contact (Wajib diisi & Minimal 3 Angka)
+      if (!formData.senderContact || formData.senderContact.trim() === "") {
+        errors.senderContact = "Please enter sender's contact.";
+      } else if (formData.senderContact.trim().length < 3) {
+        errors.senderContact = "Contact number must be at least 3 digits.";
+      }
+
       if (!formData.senderEmail) {
         errors.senderEmail = "Please enter sender's email address.";
       } else if (!String(formData.senderEmail).includes("@")) {
@@ -179,10 +186,22 @@ function AdminControlContent() {
       }
       if (!formData.senderAddress) errors.senderAddress = "Please enter origin address.";
       if (!formData.senderCountry) errors.senderCountry = "Please enter origin country.";
-      if (!formData.senderCity) errors.senderCity = "Please enter origin city.";
+      
+      if (!formData.senderCity || formData.senderCity.trim() === "") {
+        errors.senderCity = "Please enter origin city.";
+      } else if (formData.senderCity.trim().length < 3) {
+        errors.senderCity = "Origin city must be at least 3 characters.";
+      }
 
       if (!formData.recipientName) errors.recipientName = "Please enter recipient's name.";
-      if (!formData.recipientContact) errors.recipientContact = "Please enter recipient's contact.";
+      
+      // Validasi Recipient Contact (Wajib diisi & Minimal 3 Angka)
+      if (!formData.recipientContact || formData.recipientContact.trim() === "") {
+        errors.recipientContact = "Please enter recipient's contact.";
+      } else if (formData.recipientContact.trim().length < 3) {
+        errors.recipientContact = "Contact number must be at least 3 digits.";
+      }
+
       if (!formData.recipientEmail) {
         errors.recipientEmail = "Please enter recipient's email address.";
       } else if (!String(formData.recipientEmail).includes("@")) {
@@ -190,7 +209,12 @@ function AdminControlContent() {
       }
       if (!formData.recipientAddress) errors.recipientAddress = "Please enter destination address.";
       if (!formData.recipientCountry) errors.recipientCountry = "Please enter destination country.";
-      if (!formData.recipientCity) errors.recipientCity = "Please enter destination city.";
+      
+      if (!formData.recipientCity || formData.recipientCity.trim() === "") {
+        errors.recipientCity = "Please enter destination city.";
+      } else if (formData.recipientCity.trim().length < 3) {
+        errors.recipientCity = "Destination city must be at least 3 characters.";
+      }
 
       if (!formData.cargoDesc) errors.cargoDesc = "Please enter a description for the cargo.";
       if (!formData.weight || parseFloat(formData.weight) <= 0) errors.weight = "Please enter a weight greater than 0.";
@@ -289,7 +313,6 @@ function AdminControlContent() {
     }
   };
 
-  // ✅ FIX: Logika filter data pintar yang otomatis mengenali format ID (Prefix-ID)
   const filterData = (arr: any[], keys: string[], prefix: string = "") => {
     if (!searchQuery) return arr;
     const query = searchQuery.toLowerCase();
@@ -829,7 +852,12 @@ function AdminControlContent() {
                         </div>
                         <div>
                           <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.senderContact ? "text-[#FF3B30]" : "text-white/40"}`}>CONTACT</label>
-                          <input type="text" value={formData.senderContact || ""} onChange={e => updateField("senderContact", e.target.value)} className={getInputClass("senderContact")} />
+                          <input 
+                            type="text" 
+                            value={formData.senderContact || ""} 
+                            onChange={e => updateField("senderContact", e.target.value.replace(/\D/g, ""))} 
+                            className={getInputClass("senderContact")} 
+                          />
                           <FieldError error={formErrors.senderContact} />
                         </div>
                         <div className="col-span-2">
@@ -867,7 +895,12 @@ function AdminControlContent() {
                         </div>
                         <div>
                           <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.recipientContact ? "text-[#FF3B30]" : "text-white/40"}`}>CONTACT</label>
-                          <input type="text" value={formData.recipientContact || ""} onChange={e => updateField("recipientContact", e.target.value)} className={getInputClass("recipientContact")} />
+                          <input 
+                            type="text" 
+                            value={formData.recipientContact || ""} 
+                            onChange={e => updateField("recipientContact", e.target.value.replace(/\D/g, ""))} 
+                            className={getInputClass("recipientContact")} 
+                          />
                           <FieldError error={formErrors.recipientContact} />
                         </div>
                         <div className="col-span-2">
@@ -919,15 +952,17 @@ function AdminControlContent() {
                             <input type="number" value={formData.dimensions || ""} onChange={e => updateField("dimensions", e.target.value)} className={getInputClass("dimensions")} />
                             <FieldError error={formErrors.dimensions} />
                           </div>
+                          {/* ✅ PERBAIKAN & SINKRONISASI DROPDOWN KATEGORI DENGAN SISI PELANGGAN */}
                           <div className="flex flex-col gap-2">
                             <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-1 block font-mono ${formErrors.category ? "text-[#FF3B30]" : "text-white/40"}`}>CATEGORY</label>
                             <div className="relative">
                               <select value={formData.category || ""} onChange={e => updateField("category", e.target.value)} className={getSelectClass("category")}>
-                                <option value=" " disabled hidden>Select category...</option>
-                                <option value="electronics">Electronics</option>
-                                <option value="clothing">Clothing</option>
-                                <option value="food">Food & Beverage</option>
-                                <option value="heavy">Heavy Machinery</option>
+                                <option value="" disabled hidden>Select cargo category...</option>
+                                <option value="general">General Goods (Dry)</option>
+                                <option value="hazardous">Hazardous / Chemicals</option>
+                                <option value="perishable">Perishable (Needs Cold Storage)</option>
+                                <option value="fragile">Fragile / Electronics</option>
+                                <option value="oversized">Oversized Machinery</option>
                               </select>
                               <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                             </div>
