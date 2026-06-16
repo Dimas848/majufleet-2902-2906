@@ -53,7 +53,7 @@ model Port {
 model Invoice {
   id            Int      @id @default(autoincrement())
   invoiceNumber String   @unique // Contoh: INV-2026-0001
-  amount        Int      // Total biaya dalam Rupiah
+  amount        BigInt     // Total biaya dalam Rupiah
   status        String   @default("Pending") // "Pending" atau "Paid"
   createdAt     DateTime @default(now())
   

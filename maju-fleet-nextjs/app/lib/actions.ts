@@ -519,9 +519,11 @@ export async function confirmInvoicePayment(invoiceId: number, shipmentId: numbe
 
 export async function getCustomerBilling(userId: number) {
   try {
-    // 💡 Menarik data Tagihan resmi dari tabel Invoice
+    // Pastikan userId dikonversi ke Number
+    const uId = Number(userId);
+    
     const dbInvoices = await prisma.invoice.findMany({
-      where: { shipment: { userId: Number(userId) } },
+      where: { shipment: { userId: uId } },
       include: {
         shipment: {
           include: {
@@ -532,53 +534,45 @@ export async function getCustomerBilling(userId: number) {
       orderBy: { createdAt: 'desc' }
     });
 
+    // DEBUG: Cek apakah data benar-benar ditemukan
+    console.log(`Found ${dbInvoices.length} invoices for user ${uId}`);
+
+    if (dbInvoices.length === 0) return { success: true, invoices: [], summary: { totalUnpaid: 0, totalPaid: 0, pendingCount: 0 } };
+
     let totalUnpaid = 0;
     let totalPaid = 0;
     let pendingCount = 0;
 
     const invoices = dbInvoices.map((inv: any) => {
       const s = inv.shipment;
+      // Gunakan fallback agar tidak crash jika shipment/items null
       const cleanWeight = s?.weight || 0;
+      const amount = Number(inv.amount); // Pastikan angka (BigInt/String jadi Number)
 
-      if (inv.status !== "Paid") {
-        totalUnpaid += inv.amount;
+      if (inv.status !== "Paid" && s?.status !== "CANCELED") {
+        totalUnpaid += amount;
         pendingCount += 1;
-      } else {
-        totalPaid += inv.amount;
+      } else if (inv.status === "Paid" && s?.status !== "CANCELED") {
+        totalPaid += amount;
       }
-
-      const formattedDate = new Date(inv.createdAt).toLocaleDateString('id-ID', {
-        day: '2-digit', month: 'short', year: 'numeric'
-      });
-
-      // Pecah kembali untuk tampilan visual struk (Asumsi persentase)
-      const insurance = Math.round(inv.amount * 0.044); // Aproksimasi dari total
-      const fuel = Math.round(inv.amount * 0.07);
-      const baseCharge = inv.amount - insurance - fuel;
 
       return {
         id: inv.id,
         invoiceNumString: inv.invoiceNumber,
         shipmentId: inv.shipmentId,
         ref: s?.receipt_number || "UNKNOWN",
-        date: formattedDate,
-        amount: inv.amount, 
-        status: inv.status,
+        date: new Date(inv.createdAt).toLocaleDateString('id-ID'),
+        amount: amount, 
+        status: s?.status === "CANCELED" ? "Canceled" : inv.status,
         items: [
-          { desc: `Freight Charges (${s?.cargoDesc || "Cargo load"}) - ${cleanWeight} KG`, price: baseCharge },
-          { desc: `Logistics Protection Insurance`, price: insurance },
-          { desc: `Fuel & Marine Surcharge`, price: fuel }
+          { desc: `Freight Charges (${s?.cargoDesc || "Cargo load"}) - ${cleanWeight} KG`, price: amount }
         ]
       };
     });
 
-    return {
-      success: true,
-      invoices,
-      summary: { totalUnpaid, totalPaid, pendingCount }
-    };
+    return { success: true, invoices, summary: { totalUnpaid, totalPaid, pendingCount } };
   } catch (error) {
-    console.error("Gagal memuat data billing dari database:", error);
+    console.error("DEBUG ERROR: Gagal memuat billing:", error);
     return { success: false, invoices: [], summary: { totalUnpaid: 0, totalPaid: 0, pendingCount: 0 } };
   }
 }
