@@ -74,7 +74,7 @@ model Shipment {
   userId          Int?
   // ✅ Diberi nama "ShipmentOwner" agar tidak bentrok dengan relasi kapten
   user            User?          @relation("ShipmentOwner", fields: [userId], references: [id])
-  
+  invoice         Invoice?
   // ✅ SINKRONISASI RELASI: Mengubah teks kapten biasa menjadi ID yang terikat ke tabel User
   captainId       Int?
   captain         User?          @relation("ShipmentCaptain", fields: [captainId], references: [id])
@@ -121,15 +121,15 @@ model PackageType {
 }
 
 model ShipmentItem {
-  id            Int      @id @default(autoincrement())
+  id            Int         @id @default(autoincrement())
   shipmentId    Int
-  packageTypeId Int
-  weight_kg     Float
+  shipment      Shipment    @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  
+  packageTypeId Int         // Cukup tulis satu kali saja di sini
+  packageType   PackageType @relation(fields: [packageTypeId], references: [id])
+  
   description   String?
-
-  shipment      Shipment     @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  packageTypeId Int
-  packageType   PackageType  @relation(fields: [packageTypeId], references: [id])
+  weight_kg     Float?
 }
 
 model ShipmentDetail {
