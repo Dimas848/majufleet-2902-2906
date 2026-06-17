@@ -34,7 +34,7 @@ function AdminControlContent() {
 
   const [formData, setFormData] = useState<any>({});
   
-  // ✅ STATE BARU JU: Melacak status awal kargo sebelum diedit untuk mengunci state machine pengiriman
+  // Melacak status awal kargo sebelum diedit untuk mengunci state machine pengiriman
   const [initialStatus, setInitialStatus] = useState<string>("");
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -125,7 +125,6 @@ function AdminControlContent() {
     setEditingId(item.id);
     const currentPackageId = item.items && item.items.length > 0 ? String(item.items[0].packageTypeId) : "2";
     
-    // ✅ FIX: Catat status awal kargo dari database Node untuk validasi alur pengiriman kustom
     const currentStatus = item.status === "DELAYED" ? "PENDING" : (item.status || "PENDING");
     setInitialStatus(currentStatus);
 
@@ -349,7 +348,6 @@ function AdminControlContent() {
     </div>
   );
 
-  // ✅ FIX: Konfigurasi State Machine Status Kargo (Mencegah EN ROUTE diturunkan kembali ke PENDING)
   const currentAvailableStatuses = useMemo(() => {
     if (initialStatus === "EN ROUTE") {
       return ["EN ROUTE", "NOT DEPARTED YET", "DELIVERED"];
@@ -357,7 +355,6 @@ function AdminControlContent() {
     return ["PENDING", "NOT DEPARTED YET", "EN ROUTE", "ARRIVED", "DELIVERED"];
   }, [initialStatus]);
 
-  // ✅ FIX: Dropdown Kapal dan Crew HANYA DAPAT dipilih jika status adalah PENDING
   const isFleetAssignmentDisabled = useMemo(() => {
     return formData.status !== "PENDING";
   }, [formData.status]);
@@ -495,8 +492,8 @@ function AdminControlContent() {
                             <span className={`px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-full border ${getStatusBadgeStyle(s.status)}`}>{s.status}</span>
                           </td>
                           <td className="p-4 flex justify-end gap-3">
-                            <button type="button" onClick={() => handleEdit(s)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
-                            <button type="button" onClick={() => openDeleteConfirmation(s.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
+                            {/* ✅ MODIFIKASI: Hanya ada tombol Edit untuk data Fleet, tombol hapus dihilangkan secara permanen */}
+                            <button type="button" onClick={() => handleEdit(s)} className="text-white/40 hover:text-[#a2d2ff] transition-colors p-1.5 rounded hover:bg-[#a2d2ff]/10 flex items-center gap-1 text-[11px] font-mono tracking-widest uppercase font-bold"><Edit size={16} /></button>
                           </td>
                         </tr>
                       ));
@@ -518,7 +515,7 @@ function AdminControlContent() {
                             </div>
                           </td>
                           <td className="p-4 align-top"><span className="flex items-center gap-2 px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-full bg-green-500/10 text-green-400 border border-green-500/20 w-max"><CheckCircle size={12}/> {c.status || 'Active'}</span></td>
-                          <td className="p-4 flex justify-end gap-3 align-top"><button type="button" onClick={() => openDeleteConfirmation(c.id)} className="text-white/40 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-500/10"><Trash2 size={18} /></button></td>
+                          <td className="p-4 flex justify-end gap-3 align-top"><button type="button" onClick={() => openDeleteConfirmation(c.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button></td>
                         </tr>
                       ));
                     })()}
@@ -599,7 +596,6 @@ function AdminControlContent() {
                         <div>
                           <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.vesselId ? "text-[#FF3B30]" : "text-white/40"}`}>ASSIGNED VESSEL</label>
                           <div className="relative">
-                            {/* ✅ FIX: Dropdown Kapal HANYA AKTIF saat status kargo adalah PENDING */}
                             <select
                               disabled={isFleetAssignmentDisabled}
                               value={formData.vesselId || ""}
@@ -623,7 +619,6 @@ function AdminControlContent() {
                         <div>
                           <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.captain ? "text-[#FF3B30]" : "text-white/40"}`}>ASSIGNED CAPTAIN / CREW LEAD</label>
                           <div className="relative">
-                            {/* ✅ FIX: Dropdown Crew HANYA AKTIF saat status kargo adalah PENDING */}
                             <select
                               disabled={isFleetAssignmentDisabled}
                               value={formData.captain || ""}
@@ -640,7 +635,6 @@ function AdminControlContent() {
                       </div>
                     </div>
 
-                    {/* ✅ FIX: Form Input Tag Orisinil Dikembalikan Utuh (Teks Jelas Terbaca, Berwarna Redup, Menggunakan readOnly) */}
                     {/* SENDER INFORMATION */}
                     <div>
                       <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">

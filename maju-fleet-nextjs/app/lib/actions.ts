@@ -67,66 +67,51 @@ export async function registerCustomer(formData: any) {
   }
 }
 
-export async function loginCustomer(email: string, password?: string) {
+// ✅ SISTEM LOGIN GABUNGAN (SATU PINTU)
+export async function loginUserUnified(email: string, password?: string) {
   try {
     if (!email || !password) return { success: false, message: "Email dan Password harus diisi." };
 
     const user = await prisma.user.findUnique({ where: { email: email } });
 
-    if (!user || user.role !== "customer") {
-      await recordAccessLog(email, "FAILED"); // Catat log gagal
-      return { success: false, message: "Email tidak ditemukan atau Anda bukan akun Customer!" };
+    if (!user) {
+      await recordAccessLog(email, "FAILED"); 
+      return { success: false, message: "Email tidak ditemukan di sistem." };
     }
 
     if (user.password !== password) {
-      await recordAccessLog(email, "FAILED_PASSWORD", user); // Catat log salah password
+      await recordAccessLog(email, "FAILED_PASSWORD", user); 
       return { success: false, message: "Password yang Anda masukkan salah!" };
     }
 
     const cookieStore = await cookies();
-    cookieStore.set("session_user_id", String(user.id), { httpOnly: true, maxAge: 60 * 60 * 24 });
-    cookieStore.set("session_user_name", user.name, { maxAge: 60 * 60 * 24 });
+    
+    // Deteksi Role User untuk menentukan jenis Cookie yang diset
+    const isAdmin = user.role === "administrator" || user.role === "captain";
+    
+    if (isAdmin) {
+      // Set Session untuk Admin (Max Age 2 Jam)
+      cookieStore.set("admin_session_id", String(user.id), { httpOnly: true, maxAge: 60 * 60 * 2 });
+      cookieStore.set("admin_name", user.name, { maxAge: 60 * 60 * 2 });
+    } else if (user.role === "customer") {
+      // Set Session untuk Customer (Max Age 24 Jam)
+      cookieStore.set("session_user_id", String(user.id), { httpOnly: true, maxAge: 60 * 60 * 24 });
+      cookieStore.set("session_user_name", user.name, { maxAge: 60 * 60 * 24 });
+    } else {
+      await recordAccessLog(email, "FAILED_ROLE", user);
+      return { success: false, message: "Akses ditolak: Peran akun tidak dikenali." };
+    }
 
-    await recordAccessLog(email, "SUCCESS", user); // Catat log sukses
+    await recordAccessLog(email, "SUCCESS", user); 
 
-    return { success: true, message: "Access Authorized. Welcome back!" };
+    return { 
+      success: true, 
+      message: "ACCESS AUTHORIZED.",
+      role: isAdmin ? "admin" : "customer" 
+    };
   } catch (error) {
-    console.error("Error Login Customer:", error);
+    console.error("Error Unified Login:", error);
     return { success: false, message: "Terjadi kesalahan koneksi pada server." };
-  }
-}
-
-export async function loginAdmin(commanderId: string, masterKey: string) {
-  if (!commanderId || !masterKey) return { success: false, message: "ACCESS DENIED." };
-
-  try {
-    const adminUser = await prisma.user.findUnique({ where: { email: commanderId } });
-
-    if (!adminUser) {
-      await recordAccessLog(commanderId, "FAILED");
-      return { success: false, message: "ACCESS DENIED: USER NOT FOUND." };
-    }
-
-    if (adminUser.password !== masterKey) {
-      await recordAccessLog(commanderId, "FAILED_PASSWORD", adminUser);
-      return { success: false, message: "ACCESS DENIED: PASSWORD INVALID." };
-    }
-
-    if (adminUser.role !== "administrator" && adminUser.role !== "captain") {
-      await recordAccessLog(commanderId, "FAILED_ROLE", adminUser);
-      return { success: false, message: "ACCESS DENIED: ROLE NOT AUTHORIZED." };
-    }
-
-    const cookieStore = await cookies();
-    cookieStore.set("admin_session_id", String(adminUser.id), { httpOnly: true, maxAge: 60 * 60 * 2 });
-    cookieStore.set("admin_name", adminUser.name, { maxAge: 60 * 60 * 2 });
-
-    await recordAccessLog(commanderId, "SUCCESS", adminUser);
-
-    return { success: true, message: "ACCESS AUTHORIZED." };
-  } catch (error) {
-    console.error("Admin Auth Error:", error);
-    return { success: false, message: "SYSTEM ERROR." };
   }
 }
 
@@ -657,5 +642,38 @@ export async function cancelShipmentCustomer(invoiceId: number, shipmentId: numb
   } catch (error) {
     console.error("Gagal membatalkan transaksi customer:", error);
     return { success: false, message: "Terjadi kesalahan internal saat memproses pembatalan kargo." };
+  }
+}
+
+// ==============================================================================
+// 5. ANALYTICS ACTIONS (NATIVE QUERY UNTUK DASHBOARD ADMIN)
+// ==============================================================================
+
+export async function getAnalyticsByTime(chartTimeFilter: "Day" | "Week" | "Month") {
+  try {
+    const now = new Date();
+    let startDate = new Date();
+
+    // Logika pemotongan waktu mundur
+    if (chartTimeFilter === "Day") startDate.setDate(now.getDate() - 1);
+    else if (chartTimeFilter === "Week") startDate.setDate(now.getDate() - 7);
+    else if (chartTimeFilter === "Month") startDate.setDate(now.getDate() - 30);
+
+    const data = await prisma.shipment.findMany({
+      where: {
+        book_date: { gte: startDate },
+        NOT: { status: "CANCELED" } // Jangan hitung kargo yang dibatalkan
+      },
+      include: {
+        items: { include: { packageType: true } },
+        invoice: true
+      },
+      orderBy: { book_date: "asc" }
+    });
+
+    return data;
+  } catch (error) {
+    console.error("Gagal menarik data Analytics dinamis dari Neon:", error);
+    return [];
   }
 }

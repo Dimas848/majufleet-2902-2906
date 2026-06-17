@@ -4,9 +4,11 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Menu, X, User, Lock, Eye, EyeOff, RefreshCw, ShieldAlert, ArrowLeft, Mail, Phone, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import { Menu, X, User, Lock, Eye, EyeOff, RefreshCw, ArrowLeft, Mail, Phone, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { loginCustomer, registerCustomer, loginAdmin } from "../app/lib/actions";
+
+// ✅ Gunakan fungsi unified (loginUserUnified) yang sudah kita buat sebelumnya
+import { loginUserUnified, registerCustomer } from "../app/lib/actions";
 
 const links = [
   { label: "Home", href: "/" },
@@ -22,13 +24,12 @@ export default function Navbar() {
   
   const [menuOpen, setMenuOpen] = useState(false);
   const [mainMenuDropdown, setMainMenuDropdown] = useState(false);
-  const [activeModal, setActiveModal] = useState<"none" | "login" | "register" | "admin">("none");
+  const [activeModal, setActiveModal] = useState<"none" | "login" | "register">("none");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [isScrolled, setIsScrolled] = useState(false);
 
   const [showLoginPassword, setShowLoginPassword] = useState(false);
-  const [showAdminPassword, setShowAdminPassword] = useState(false);
   const [showRegPassword, setShowRegPassword] = useState(false);
   const [showRegConfirm, setShowRegConfirm] = useState(false);
   
@@ -43,13 +44,7 @@ export default function Navbar() {
   const [regConfirm, setRegConfirm] = useState("");
   const [captchaInput, setCaptchaInput] = useState("");
 
-  const [adminId, setAdminId] = useState("");
-  const [adminKey, setAdminKey] = useState("");
-
   const [captchaCode, setCaptchaCode] = useState("");
-  
-  // ✅ STATE BARU: Untuk menampung eror per kolom input (Merah-merah di bawah input)
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   const generateCaptcha = () => {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -60,14 +55,13 @@ export default function Navbar() {
     setCaptchaCode(result);
   };
 
-  // HANDLER DETEKSI PEMBOBOLAN URL (MIDDLEWARE INTERCEPTOR)
   useEffect(() => {
     const authStatus = searchParams.get("auth");
     if (authStatus === "customer_required") {
       setActiveModal("login");
       setErrorMsg("UNAUTHORIZED ACCESS: PLEASE LOG IN TO ENTER DASHBOARD.");
     } else if (authStatus === "admin_required") {
-      setActiveModal("admin");
+      setActiveModal("login");
       setErrorMsg("ACCESS DENIED: ADMINISTRATOR PRIVILEGES REQUIRED.");
     }
   }, [searchParams]);
@@ -75,18 +69,12 @@ export default function Navbar() {
   useEffect(() => {
     generateCaptcha();
     
-    if (window.scrollY > 50) {
-      setIsScrolled(true);
-    } else {
-      setIsScrolled(false);
-    }
+    if (window.scrollY > 50) setIsScrolled(true);
+    else setIsScrolled(false);
 
     const handleScroll = () => {
-      if (window.scrollY > 50) {
-        setIsScrolled(true);
-      } else {
-        setIsScrolled(false);
-      }
+      if (window.scrollY > 50) setIsScrolled(true);
+      else setIsScrolled(false);
     };
 
     window.addEventListener("scroll", handleScroll);
@@ -109,58 +97,39 @@ export default function Navbar() {
   else if (strength === 75) strengthColor = "bg-yellow-400";
   else if (strength === 100) strengthColor = "bg-green-500";
 
-  // Fungsi pembantu untuk membersihkan eror kolom saat user mengetik
-  const clearFieldError = (field: string) => {
-    if (formErrors[field]) {
-      setFormErrors(prev => ({ ...prev, [field]: "" }));
-    }
-  };
-
-  // Re-usable komponen teks eror bawah kolom
-  const FieldError = ({ error }: { error?: string }) => {
-    if (!error) return null;
-    return (
-      <p className="text-[#FF3B30] text-[11px] font-mono mt-1.5 flex items-center gap-1.5 uppercase tracking-wide">
-        <AlertCircle size={12} className="text-[#FF3B30]" /> {error}
-      </p>
-    );
-  };
-
   // ==========================================
-  // 1. HANDLER LOGIN CUSTOMER
+  // 1. HANDLER LOGIN (UNIFIED - ADMIN & CUSTOMER)
   // ==========================================
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
-    setFormErrors({});
 
-    // Validasi Client-side
-    let errors: Record<string, string> = {};
-    if (!loginEmail) errors.loginEmail = "Please enter username or email.";
-    if (!loginPassword) errors.loginPassword = "Please enter password.";
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      setErrorMsg("MISSING FIELDS. FAILED TO PROCESS DATA.");
+    // Validasi Client-side tanpa highlight merah di form
+    if (!loginEmail || !loginPassword) {
+      setErrorMsg("PLEASE ENTER BOTH USERNAME/EMAIL AND PASSWORD.");
       return;
     }
 
     setLoading(true);
     try {
-      const res = await loginCustomer(loginEmail, loginPassword);
+      const res = await loginUserUnified(loginEmail, loginPassword);
       if (res && res.success) {
         setLoading(false);
         setActiveModal("none");
         resetFormStates();
-        router.push("/dashboard/bookship");
+        
+        // Redirect otomatis berdasarkan role dari backend
+        if (res.role === "admin") {
+          router.push("/Dashboard-Admin/fleet");
+        } else {
+          router.push("/dashboard/bookship");
+        }
       } else {
         let rawMessage = res?.message || "INVALID USERNAME OR PASSWORD.";
-        if (rawMessage.includes("tidak ditemukan") || rawMessage.includes("bukan akun Customer")) {
-          rawMessage = "EMAIL NOT FOUND OR INVALID CUSTOMER ACCOUNT.";
-          setFormErrors({ loginEmail: "Email not found registry record." });
-        } else if (rawMessage.includes("salah") || rawMessage.includes("Password yang Anda masukkan salah")) {
+        if (rawMessage.includes("tidak ditemukan")) {
+          rawMessage = "EMAIL NOT FOUND IN REGISTRY RECORD.";
+        } else if (rawMessage.includes("salah")) {
           rawMessage = "INCORRECT PASSWORD. PLEASE TRY AGAIN.";
-          setFormErrors({ loginPassword: "Security clearance password match failed." });
         }
         setErrorMsg(rawMessage.toUpperCase());
         setLoading(false);
@@ -177,28 +146,20 @@ export default function Navbar() {
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg("");
-    setFormErrors({});
 
-    // Validasi Client-side kolom kosong
-    let errors: Record<string, string> = {};
-    if (!regName) errors.regName = "Please enter full / company name.";
-    if (!regEmail) errors.regEmail = "Please enter email address.";
-    if (!regPhone) errors.regPhone = "Please enter phone number.";
-    if (!regPassword) errors.regPassword = "Please enter password.";
-    if (!regConfirm) errors.regConfirm = "Please repeat password verification.";
-    if (!captchaInput) errors.captchaInput = "Please enter captcha code verification.";
-
-    if (regPassword && regConfirm && regPassword !== regConfirm) {
-      errors.regConfirm = "PASSWORDS DO NOT MATCH SYSTEM RECORDS.";
+    // Validasi Client-side tanpa highlight merah di form
+    if (!regName || !regEmail || !regPhone || !regPassword || !regConfirm || !captchaInput) {
+      setErrorMsg("MISSING REQUIRED REGISTRATION FIELDS.");
+      return;
     }
 
-    if (captchaInput && captchaInput.toUpperCase() !== captchaCode.toUpperCase()) {
-      errors.captchaInput = "INVALID CAPTCHA SECURITY CODE.";
+    if (regPassword !== regConfirm) {
+      setErrorMsg("PASSWORDS DO NOT MATCH SYSTEM RECORDS.");
+      return;
     }
 
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      setErrorMsg("MISSING FIELDS. FAILED TO PROCESS DATA.");
+    if (captchaInput.toUpperCase() !== captchaCode.toUpperCase()) {
+      setErrorMsg("INVALID CAPTCHA SECURITY CODE.");
       return;
     }
 
@@ -217,44 +178,7 @@ export default function Navbar() {
         alert(`Your username "${regEmail}" has been registered successfully! Please sign in using your credentials.`);
         switchModal("login"); 
       } else {
-        setErrorMsg(res?.message || "REGISTRATION FAILED.");
-        setLoading(false);
-      }
-    } catch (err) {
-      setErrorMsg("CONNECTION FAULT TO DATABASE SERVER.");
-      setLoading(false);
-    }
-  };
-
-  // ==========================================
-  // 3. HANDLER LOGIN ADMIN OVERRIDE
-  // ==========================================
-  const handleAdminSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrorMsg("");
-    setFormErrors({});
-
-    // Validasi Client-side admin
-    let errors: Record<string, string> = {};
-    if (!adminId) errors.adminId = "Please enter authorized commander id.";
-    if (!adminKey) errors.adminKey = "Please enter master clearance key.";
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      setErrorMsg("MISSING FIELDS. FAILED TO PROCESS DATA.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await loginAdmin(adminId, adminKey);
-      if (res && res.success) {
-        setLoading(false);
-        setActiveModal("none");
-        resetFormStates();
-        router.push("/Dashboard-Admin/fleet");
-      } else {
-        setErrorMsg(res?.message || "ACCESS DENIED: CREDENTIAL INVALID.");
+        setErrorMsg(res?.message?.toUpperCase() || "REGISTRATION FAILED.");
         setLoading(false);
       }
     } catch (err) {
@@ -265,7 +189,6 @@ export default function Navbar() {
 
   const resetFormStates = () => {
     setErrorMsg("");
-    setFormErrors({});
     setLoading(false);
     setLoginEmail("");
     setLoginPassword("");
@@ -275,11 +198,9 @@ export default function Navbar() {
     setRegPassword("");
     setRegConfirm("");
     setCaptchaInput("");
-    setAdminId("");
-    setAdminKey("");
   };
 
-  const switchModal = (modalType: "none" | "login" | "register" | "admin") => {
+  const switchModal = (modalType: "none" | "login" | "register") => {
     resetFormStates();
     setActiveModal(modalType);
     if (searchParams.get("auth")) {
@@ -375,7 +296,7 @@ export default function Navbar() {
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-10 overflow-y-auto">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => switchModal("none")} className="fixed inset-0 bg-black/80 backdrop-blur-sm" />
 
-            {/* 1. MODAL LOGIN CUSTOMER */}
+            {/* 1. MODAL LOGIN (UNIFIED) */}
             {activeModal === "login" && (
               <motion.div key="modal-login" initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-[420px] bg-[#0a0a0c] border border-white/10 rounded-xl p-8 shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10 my-auto">
                 <button onClick={() => switchModal("none")} className="absolute top-4 right-4 text-white/40 hover:text-[#B026FF] transition-colors"><X size={20} /></button>
@@ -391,33 +312,20 @@ export default function Navbar() {
                     <label className="font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block text-white/80">USERNAME / EMAIL</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><User size={16} /></div>
-                      <input type="email" value={loginEmail} onChange={(e) => { setLoginEmail(e.target.value); clearFieldError("loginEmail"); }} placeholder="Enter email" className={`w-full bg-[#121317] border rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.loginEmail ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
+                      {/* ✅ FIX: Hapus outline merah dari form */}
+                      <input type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="Enter email address" className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
                     </div>
-                    <FieldError error={formErrors.loginEmail} />
-                    {/* ✅ FIX: Hapus syarat formErrors.loginEmail agar teks example tetap muncul walau ada eror */}
-                    {!searchParams.get("auth") && (
-                      <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide">
-                        💡 Example: <button type="button" onClick={() => { setLoginEmail("dimju@gmail.com"); clearFieldError("loginEmail"); }} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">dimju@gmail.com</button> (Click to fill)
-                      </span>
-                    )}
                   </div>
                   
                   <div>
                     <label className="font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block text-white/80">PASSWORD</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Lock size={16} /></div>
-                      <input type={showLoginPassword ? "text" : "password"} value={loginPassword} onChange={(e) => { setLoginPassword(e.target.value); clearFieldError("loginPassword"); }} placeholder="Enter password" className={`w-full bg-[#121317] border rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.loginPassword ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
+                      <input type={showLoginPassword ? "text" : "password"} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Enter your password" className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
                       <button type="button" onClick={() => setShowLoginPassword(!showLoginPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
                         {showLoginPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
-                    <FieldError error={formErrors.loginPassword} />
-                    {/* ✅ FIX: Hapus syarat formErrors.loginPassword */}
-                    {!searchParams.get("auth") && (
-                      <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide">
-                        💡 Example: <button type="button" onClick={() => { setLoginPassword("maju123"); setShowLoginPassword(true); clearFieldError("loginPassword"); }} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">maju123</button> (Click to fill)
-                      </span>
-                    )}
                   </div>
 
                   {errorMsg && (
@@ -433,7 +341,6 @@ export default function Navbar() {
                 </form>
                 <div className="mt-6 flex flex-col items-center gap-3 font-inter text-[12px]">
                   <p className="text-white/60">Don't have an account? <button onClick={() => switchModal("register")} className="text-[#B026FF] font-semibold hover:text-[#BDF4FF] transition-colors">Register Now</button></p>
-                  <button onClick={() => switchModal("admin")} className="text-white/40 hover:text-[#BDF4FF] transition-colors uppercase tracking-[1px] text-[10px] font-grotesk mt-1">LOGIN AS ADMIN?</button>
                 </div>
               </motion.div>
             )}
@@ -450,39 +357,35 @@ export default function Navbar() {
                     <label className="font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block text-white/80">Full / Company Name</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><User size={16} /></div>
-                      <input type="text" value={regName} onChange={(e) => { setRegName(e.target.value); clearFieldError("regName"); }} placeholder="e.g. PT. Logistik Jaya" className={`w-full bg-[#121317] border rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.regName ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
+                      <input type="text" value={regName} onChange={(e) => setRegName(e.target.value)} placeholder="e.g. PT. Logistik Jaya" className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
                     </div>
-                    <FieldError error={formErrors.regName} />
                   </div>
 
                   <div>
                     <label className="font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block text-white/80">Email</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Mail size={16} /></div>
-                      <input type="email" value={regEmail} onChange={(e) => { setRegEmail(e.target.value); clearFieldError("regEmail"); }} placeholder="Enter email address..." className={`w-full bg-[#121317] border rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.regEmail ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
+                      <input type="email" value={regEmail} onChange={(e) => setRegEmail(e.target.value)} placeholder="Enter email address..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
                     </div>
-                    <FieldError error={formErrors.regEmail} />
                   </div>
 
                   <div>
                     <label className="font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block text-white/80">Phone Number</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Phone size={16} /></div>
-                      <input type="tel" value={regPhone} onChange={(e) => { setRegPhone(e.target.value); clearFieldError("regPhone"); }} placeholder="08xxxxxxxxxx" className={`w-full bg-[#121317] border rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.regPhone ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
+                      <input type="tel" value={regPhone} onChange={(e) => setRegPhone(e.target.value)} placeholder="08xxxxxxxxxx" className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
                     </div>
-                    <FieldError error={formErrors.regPhone} />
                   </div>
 
                   <div>
                     <label className="font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block text-white/80">Password</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Lock size={16} /></div>
-                      <input type={showRegPassword ? "text" : "password"} value={regPassword} onChange={(e) => { setRegPassword(e.target.value); clearFieldError("regPassword"); }} placeholder="Create password..." className={`w-full bg-[#121317] border rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.regPassword ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
+                      <input type={showRegPassword ? "text" : "password"} value={regPassword} onChange={(e) => setRegPassword(e.target.value)} placeholder="Create password..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
                       <button type="button" onClick={() => setShowRegPassword(!showRegPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
                         {showRegPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
-                    <FieldError error={formErrors.regPassword} />
                     <div className="mt-2 flex items-center justify-between">
                       <div className="flex-1 h-1.5 bg-[#121317] rounded-full overflow-hidden mr-3">
                         <div className={`h-full ${strengthColor} transition-all duration-300`} style={{ width: `${strength}%` }}></div>
@@ -495,12 +398,11 @@ export default function Navbar() {
                     <label className="font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block text-white/80">Confirm Password</label>
                     <div className="relative">
                       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Lock size={16} /></div>
-                      <input type={showRegConfirm ? "text" : "password"} value={regConfirm} onChange={(e) => { setRegConfirm(e.target.value); clearFieldError("regConfirm"); }} placeholder="Repeat password..." className={`w-full bg-[#121317] border rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.regConfirm ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
+                      <input type={showRegConfirm ? "text" : "password"} value={regConfirm} onChange={(e) => setRegConfirm(e.target.value)} placeholder="Repeat password..." className="w-full bg-[#121317] border border-[#B026FF]/30 rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
                       <button type="button" onClick={() => setShowRegConfirm(!showRegConfirm)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
                         {showRegConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     </div>
-                    <FieldError error={formErrors.regConfirm} />
                   </div>
 
                   <div>
@@ -509,8 +411,7 @@ export default function Navbar() {
                       <div className="bg-[#121317] border border-[#B026FF]/20 px-3 py-1.5 rounded font-mono text-white font-bold tracking-[2px] select-none">{captchaCode}</div>
                       <button type="button" onClick={generateCaptcha} className="text-white/40 hover:text-[#B026FF] transition-colors"><RefreshCw size={14} /></button>
                     </div>
-                    <input type="text" value={captchaInput} onChange={(e) => { setCaptchaInput(e.target.value); clearFieldError("captchaInput"); }} placeholder="Enter captcha code" className={`w-full bg-[#121317] border rounded px-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.captchaInput ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
-                    <FieldError error={formErrors.captchaInput} />
+                    <input type="text" value={captchaInput} onChange={(e) => setCaptchaInput(e.target.value)} placeholder="Enter captcha code" className="w-full bg-[#121317] border border-[#B026FF]/30 rounded px-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors" />
                   </div>
 
                   {errorMsg && (
@@ -524,70 +425,6 @@ export default function Navbar() {
                     {loading ? "Processing..." : "Register"}
                   </button>
                 </form>
-              </motion.div>
-            )}
-
-            {/* 3. MODAL LOGIN ADMIN / OVERRIDE */}
-            {activeModal === "admin" && (
-              <motion.div key="modal-admin" initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-[420px] bg-[#0a0a0c] border border-[#B026FF]/25 rounded-xl p-8 shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10 my-auto">
-                <button onClick={() => switchModal("none")} className="absolute top-4 right-4 text-white/40 hover:text-[#B026FF] transition-colors"><X size={20} /></button>
-                <div className="absolute top-0 left-0 w-16 h-16 border-t-2 border-l-2 border-[#B026FF]/30 rounded-tl-xl pointer-events-none" />
-                <div className="absolute bottom-0 right-0 w-16 h-16 border-b-2 border-r-2 border-[#B026FF]/30 rounded-br-xl pointer-events-none" />
-                <div className="flex flex-col items-center mb-6 mt-2">
-                  <ShieldAlert size={48} className="mb-4 text-[#B026FF] drop-shadow-[0_0_15px_rgba(176,38,255,0.4)]" />
-                  <h2 className="text-white font-grotesk font-bold text-xl tracking-[4px] uppercase text-center leading-tight">ADMINISTRATOR OVERRIDE</h2>
-                </div>
-
-                <form onSubmit={handleAdminSubmit} className="flex flex-col gap-5">
-                  <div>
-                    <label className="font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block text-white/80">COMMANDER ID</label>
-                    <div className="relative">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><User size={16} /></div>
-                      <input type="text" value={adminId} onChange={(e) => { setAdminId(e.target.value); clearFieldError("adminId"); }} placeholder="Authorized ID..." className={`w-full bg-[#121317] border rounded pl-12 pr-4 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.adminId ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
-                    </div>
-                    <FieldError error={formErrors.adminId} />
-                    {/* ✅ FIX: Hapus syarat formErrors.adminId */}
-                    {!searchParams.get("auth") && (
-                      <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide">
-                        💡 Example: <button type="button" onClick={() => { setAdminId("rina.commander@majufleet.com"); clearFieldError("adminId"); }} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">rina.commander@majufleet.com</button> (Click to fill)
-                      </span>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block text-white/80">MASTER KEY</label>
-                    <div className="relative">
-                      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80"><Lock size={16} /></div>
-                      <input type={showAdminPassword ? "text" : "password"} value={adminKey} onChange={(e) => { setAdminKey(e.target.value); clearFieldError("adminKey"); }} placeholder="Input clearance code..." className={`w-full bg-[#121317] border rounded pl-12 pr-12 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors ${formErrors.adminKey ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-[#B026FF]/30 focus:border-[#B026FF]"}`} />
-                      <button type="button" onClick={() => setShowAdminPassword(!showAdminPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
-                        {showAdminPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                    <FieldError error={formErrors.adminKey} />
-                    {/* ✅ FIX: Hapus syarat formErrors.adminKey */}
-                    {!searchParams.get("auth") && (
-                      <span className="text-[10px] font-mono text-white/40 mt-1.5 block tracking-wide">
-                        💡 Example: <button type="button" onClick={() => { setAdminKey("MAJUADMIN2026"); setShowAdminPassword(true); clearFieldError("adminKey"); }} className="text-[#00E3FD] underline hover:text-white transition-colors outline-none">MAJUADMIN2026</button> (Click to fill)
-                      </span>
-                    )}
-                  </div>
-
-                  {errorMsg && (
-                    <motion.div initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} className="w-full bg-[#FF3B30]/5 border border-[#FF3B30]/20 p-4 rounded-lg flex items-center gap-3 text-left">
-                      <AlertCircle size={16} className="text-[#FF3B30] shrink-0" />
-                      <p className="text-[#FF3B30] text-[11px] font-mono font-bold uppercase tracking-[1.5px] leading-relaxed">{errorMsg}</p>
-                    </motion.div>
-                  )}
-
-                  <button type="submit" disabled={loading} className="w-full py-3.5 rounded border border-[#B026FF]/50 bg-[#121317] hover:bg-[#B026FF]/10 hover:border-[#B026FF] text-white font-grotesk font-bold text-[13px] uppercase tracking-[2px] transition-all duration-300 disabled:opacity-50 shadow-[0_0_20px_rgba(176,38,255,0.1)]">
-                    {loading ? "Authenticating..." : "LOGIN"}
-                  </button>
-                </form>
-                <div className="mt-6 flex flex-col items-center gap-3 font-inter text-[12px]">
-                  <button onClick={() => switchModal("login")} className="text-white/40 hover:text-[#BDF4FF] transition-colors uppercase tracking-[1px] text-[10px] font-grotesk mt-1 flex items-center gap-1">
-                    ← RETURN TO LOGIN
-                  </button>
-                </div>
               </motion.div>
             )}
           </div>

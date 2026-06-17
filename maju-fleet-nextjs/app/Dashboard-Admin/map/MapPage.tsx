@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Settings, ChevronDown, Filter, AlertTriangle, Search, X } from "lucide-react";
+import { ChevronDown, Filter, AlertTriangle, Search, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
@@ -83,17 +83,11 @@ function MapContent() {
   const [mapSubTab, setMapSubTab] = useState<"ALL" | "ALERTS">("ALL");
   const [mapStatusFilter, setMapStatusFilter] = useState("ALL");
   const [isSidebarFilterOpen, setIsSidebarFilterOpen] = useState(false);
-  const [isControlModalOpen, setIsControlModalOpen] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [editCrew, setEditCrew] = useState("");
-  const [editStatus, setEditStatus] = useState("");
-  const [isEditStatusDropdownOpen, setIsEditStatusDropdownOpen] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [vesselsData, setVesselsData] = useState<any[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
 
-  // ✅ FITUR BARU: State Paginasi Sidebar (5 Baris Per Halaman)
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
@@ -111,7 +105,7 @@ function MapContent() {
 
         if (dbData.shipments && dbData.shipments.length > 0) {
           const mapped = dbData.shipments.map((s: any) => {
-            const isProblem = s.status === "DELAYED" || s.status === "NOT DEPARTED YET";
+            const isProblem = s.status === "NOT DEPARTED YET";
             const dotColor = isProblem ? "#FF3B30" : "#00E3FD";
             const statusColor = isProblem ? "text-[#FF3B30]" : "text-[#00E3FD]";
 
@@ -156,10 +150,8 @@ function MapContent() {
     router.push(`/Dashboard-Admin/map?tab=${tab}`);
   };
 
-  const activeVesselDetails = vesselsData.find(v => v.id === selectedVessel);
-
   const displayedVessels = vesselsData.filter(v => {
-    const passesTab = mapSubTab === "ALL" ? true : (v.status === "DELAYED" || v.status === "NOT DEPARTED YET");
+    const passesTab = mapSubTab === "ALL" ? true : (v.status === "NOT DEPARTED YET");
     const passesStatus = mapStatusFilter === "ALL" ? true : v.status === mapStatusFilter;
     const q = searchQuery.toLowerCase().trim();
     const passesSearch = q === "" ? true : (
@@ -173,49 +165,17 @@ function MapContent() {
     return passesTab && passesStatus && passesSearch;
   });
 
-  // ✅ FITUR BARU: Auto-reset ke halaman 1 jika filter atau pencarian berubah
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, mapSubTab, mapStatusFilter]);
 
-  // ✅ FITUR BARU: Logika Slice untuk data 5 baris terpaginasi
   const totalPages = Math.ceil(displayedVessels.length / itemsPerPage);
   const paginatedVessels = displayedVessels.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  // Perhitungan pembatasan windowing tombol halaman (max 4 tombol tampil)
   const pageWindow = 4;
   let startPage = Math.max(1, currentPage - Math.floor(pageWindow / 2));
   let endPage = Math.min(totalPages, startPage + pageWindow - 1);
   if (endPage - startPage < pageWindow - 1) startPage = Math.max(1, endPage - pageWindow + 1);
-
-  const openControlModal = () => {
-    if (activeVesselDetails) {
-      setEditName(activeVesselDetails.id);
-      setEditCrew(activeVesselDetails.crew);
-      setEditStatus(activeVesselDetails.status);
-      setIsControlModalOpen(true);
-    }
-  };
-
-  const saveManualControl = () => {
-    setVesselsData(prev => prev.map(v => {
-      if (v.id === selectedVessel) {
-        const isProblem = editStatus === "DELAYED" || editStatus === "NOT DEPARTED YET";
-        return {
-          ...v,
-          id: editName,
-          crew: editCrew,
-          status: editStatus,
-          statusColor: isProblem ? "text-[#FF3B30]" : "text-[#00E3FD]",
-          dotColor: isProblem ? "#FF3B30" : "#00E3FD",
-          reason: isProblem ? (v.reason || "Manual Override Logged") : undefined,
-        };
-      }
-      return v;
-    }));
-    setSelectedVessel(editName);
-    setIsControlModalOpen(false);
-  };
 
   if (isLoadingData) return <MapSkeleton />;
 
@@ -260,7 +220,7 @@ function MapContent() {
                         className="absolute right-0 top-full mt-3 w-[180px] bg-[#121317] border border-white/10 rounded-lg shadow-2xl z-[100] overflow-hidden"
                       >
                         <div className="px-4 py-2.5 border-b border-white/5 text-[9px] font-mono text-white/40 uppercase tracking-widest bg-[#0a0a0c]">Filter by Status</div>
-                        {["ALL", "EN ROUTE", "ARRIVED", "DELAYED", "NOT DEPARTED YET"].map(opt => (
+                        {["ALL", "EN ROUTE", "ARRIVED", "NOT DEPARTED YET"].map(opt => (
                           <div
                             key={opt}
                             onClick={() => { setMapStatusFilter(opt); setIsSidebarFilterOpen(false); }}
@@ -361,7 +321,6 @@ function MapContent() {
                     </motion.div>
                   ) : (
                     <motion.div key="list-container" className="flex flex-col gap-4 w-full">
-                      {/* ✅ FIX: Sekarang merender paginatedVessels (Maksimal 5 baris) */}
                       {paginatedVessels.map((vessel, idx) => (
                         <motion.div
                           initial={{ opacity: 0, y: 10 }}
@@ -416,7 +375,7 @@ function MapContent() {
                 </AnimatePresence>
               </div>
 
-              {/* ✅ FITUR BARU: Komponen Paginasi Sidebar Estetik */}
+              {/* Komponen Paginasi Sidebar */}
               {totalPages > 1 && (
                 <div className="flex justify-between items-center gap-2 mt-4 pt-4 border-t border-white/5 font-mono text-[10px] tracking-widest uppercase text-white/40 relative z-40 shrink-0">
                   <button
@@ -451,98 +410,10 @@ function MapContent() {
                 </div>
               )}
 
-              {/* Action Control */}
-              <div className="mt-6 pt-4 shrink-0">
-                <p className="font-mono text-[10px] text-white/40 tracking-widest uppercase mb-3">ACTION CONTROL</p>
-                <button
-                  onClick={openControlModal}
-                  disabled={!activeVesselDetails}
-                  className="w-full flex justify-center items-center gap-3 bg-transparent border border-[#FF3B30]/50 text-[#FF3B30] hover:bg-[#FF3B30]/10 py-4 rounded font-grotesk font-bold text-[12px] tracking-[2px] uppercase transition-all shadow-[0_0_15px_rgba(255,59,48,0.15)] disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  <AlertTriangle size={16} /> CONTROL MANUALLY
-                </button>
-              </div>
             </div>
           </div>
         </motion.div>
       </main>
-
-      {/* CONTROL MODAL */}
-      <AnimatePresence>
-        {isControlModalOpen && activeVesselDetails && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsControlModalOpen(false)}
-              className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="relative bg-[#0a0a0c] border border-[#B026FF]/50 rounded-xl p-8 max-w-lg w-full shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10"
-            >
-              <h2 className="text-white font-grotesk font-bold text-xl tracking-[2px] uppercase mb-6 flex items-center gap-3">
-                <Settings className="text-[#B026FF]" size={20} /> Manual Control Override
-              </h2>
-              <div className="flex flex-col gap-4 mb-8">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-mono text-white/50 tracking-widest uppercase mb-1.5 block">Receipt / ID</label>
-                    <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-[#121317] border border-white/20 rounded p-3 text-sm font-bold text-white focus:border-[#B026FF] outline-none transition-colors" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-mono text-white/50 tracking-widest uppercase mb-1.5 block">Crew Leader</label>
-                    <input type="text" value={editCrew} onChange={(e) => setEditCrew(e.target.value)} className="w-full bg-[#121317] border border-white/20 rounded p-3 text-sm font-bold text-white focus:border-[#B026FF] outline-none transition-colors" />
-                  </div>
-                </div>
-                <div className="relative">
-                  <label className="text-[10px] font-mono text-white/50 tracking-widest uppercase mb-1.5 block">Status Override</label>
-                  <div
-                    onClick={() => setIsEditStatusDropdownOpen(!isEditStatusDropdownOpen)}
-                    className="w-full bg-[#121317] border border-white/20 rounded p-3 text-sm font-bold text-white cursor-pointer flex justify-between items-center hover:border-[#B026FF] transition-colors"
-                  >
-                    {editStatus} <ChevronDown size={16} className="text-white/50" />
-                  </div>
-                  <AnimatePresence>
-                    {isEditStatusDropdownOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -5 }}
-                        className="absolute top-full left-0 right-0 mt-1 bg-[#1a1b22] border border-white/20 rounded-md shadow-xl z-[150] overflow-hidden"
-                      >
-                        {["EN ROUTE", "ARRIVED", "DELAYED", "NOT DEPARTED YET"].map(s => (
-                          <div
-                            key={s}
-                            onClick={() => { setEditStatus(s); setIsEditStatusDropdownOpen(false); }}
-                            className="p-3 text-sm font-bold text-white hover:bg-[#B026FF]/20 cursor-pointer transition-colors"
-                          >
-                            {s}
-                          </div>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-                <div className="w-full h-px bg-white/10 my-2"></div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div><label className="text-[10px] font-mono text-white/30 tracking-widest uppercase mb-1.5 block">Package Type</label><input type="text" value={activeVesselDetails.package} disabled className="w-full bg-white/5 border border-white/5 rounded p-2.5 text-xs font-mono text-white/30 cursor-not-allowed" /></div>
-                  <div><label className="text-[10px] font-mono text-white/30 tracking-widest uppercase mb-1.5 block">Vessel</label><input type="text" value={activeVesselDetails.vesselName} disabled className="w-full bg-white/5 border border-white/5 rounded p-2.5 text-xs font-mono text-white/30 cursor-not-allowed" /></div>
-                  <div><label className="text-[10px] font-mono text-white/30 tracking-widest uppercase mb-1.5 block">Origin</label><input type="text" value={activeVesselDetails.origin} disabled className="w-full bg-white/5 border border-white/5 rounded p-2.5 text-xs font-mono text-white/30 cursor-not-allowed" /></div>
-                  <div><label className="text-[10px] font-mono text-white/30 tracking-widest uppercase mb-1.5 block">Destination</label><input type="text" value={activeVesselDetails.dest} disabled className="w-full bg-white/5 border border-white/5 rounded p-2.5 text-xs font-mono text-white/30 cursor-not-allowed" /></div>
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <button onClick={() => setIsControlModalOpen(false)} className="flex-1 py-3 border border-white/10 rounded-md text-white/60 hover:text-white hover:bg-white/5 font-grotesk text-[12px] uppercase tracking-[1px] transition-colors">Cancel</button>
-                <button onClick={saveManualControl} className="flex-1 py-3 bg-[#B026FF]/20 border border-[#B026FF]/50 text-[#E5B5FF] rounded-md hover:bg-[#B026FF] hover:text-white font-grotesk text-[12px] font-bold uppercase tracking-[1px] transition-colors shadow-[0_0_15px_rgba(176,38,255,0.2)]">Apply Override</button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
       <style jsx global>{`
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }

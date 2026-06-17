@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState, useMemo, useEffect, Suspense, useCallback } from "react";
-import { Settings, ChevronDown, X, RefreshCw, CheckCircle, AlertCircle } from "lucide-react";
+import { ChevronDown, X, RefreshCw, CheckCircle, AlertCircle, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useSearchParams } from "next/navigation";
 import AdminNavbar from "@/components/adminnavbar";
 import DashboardSkeleton from "@/components/DashboardSkeleton";
-import { getAllData, saveEntity } from "../../lib/actions";
+import { getAllData } from "../../lib/actions";
 
 interface Delivery {
   id: number;
@@ -32,7 +32,7 @@ function getStatusColors(status: string): { textColor: string; dotColor: string;
   if (s === "EN ROUTE") {
     return { textColor: "text-[#00E3FD]", dotColor: "bg-[#00E3FD]", isRedBox: false };
   }
-  if (s === "DELAYED" || s === "NOT DEPARTED YET") {
+  if (s === "NOT DEPARTED YET") {
     return { textColor: "text-[#FF3B30]", dotColor: "bg-[#FF3B30]", isRedBox: true };
   }
   return { textColor: "text-[#FFCC00]", dotColor: "bg-[#FFCC00]", isRedBox: false };
@@ -50,11 +50,12 @@ function FleetDashboardContent() {
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [chartTimeFilter, setChartTimeFilter] = useState<"Day" | "Week" | "Month">("Week");
   const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  
+  // State baru untuk Search Bar
+  const [searchQuery, setSearchQuery] = useState("");
+  
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
-
-  const [editingRow, setEditingRow] = useState<Delivery | null>(null);
-  const [editStatus, setEditStatus] = useState("");
 
   const [allDeliveries, setAllDeliveries] = useState<Delivery[]>([]);
   const [topStats, setTopStats] = useState({ totalVessels: 0, activeTransit: 0, arrived: 0, problem: 0 });
@@ -65,7 +66,7 @@ function FleetDashboardContent() {
     Month: []
   });
 
-  // Sistem Notifikasi Custom Toast UI Premium (Sama seperti Register)
+  // Sistem Notifikasi Custom Toast UI Premium
   const [toast, setToast] = useState<{ type: "success" | "error"; title: string; message: string } | null>(null);
 
   useEffect(() => {
@@ -93,7 +94,7 @@ function FleetDashboardContent() {
       if (dbData.shipments) {
         const active = dbData.shipments.filter((s: any) => s.status === "EN ROUTE").length;
         const arrived = dbData.shipments.filter((s: any) => s.status === "ARRIVED" || s.status === "DELIVERED").length;
-        const delayed = dbData.shipments.filter((s: any) => s.status === "DELAYED" || s.status === "NOT DEPARTED YET").length;
+        const delayed = dbData.shipments.filter((s: any) => s.status === "NOT DEPARTED YET").length;
         
         setTopStats({
           totalVessels: dbData.vessels?.length || 0,
@@ -170,6 +171,7 @@ function FleetDashboardContent() {
       }
     } catch (error) {
       console.error("Gagal memuat data dari database Neon:", error);
+      showNotification("error", "SYNC ERROR", "Failed to retrieve the latest data.");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -193,46 +195,39 @@ function FleetDashboardContent() {
   const currentPackageData = packageStatsData[chartTimeFilter] || [];
   const topTrendPackage = currentPackageData.reduce((prev: any, curr: any) => (prev?.value > curr?.value ? prev : curr), { value: 1 });
 
+  // Filter Data List (Berdasarkan Package, Status, & Search Query)
   const filteredData = useMemo(() => {
     let data = allDeliveries;
+    
     if (activePackage !== "ALL") data = data.filter(d => d.package === activePackage);
     if (statusFilter !== "ALL") data = data.filter(d => d.status === statusFilter);
+    
+    if (searchQuery.trim() !== "") {
+      const query = searchQuery.toLowerCase().trim();
+      data = data.filter(d =>
+        d.receipt.toLowerCase().includes(query) ||
+        d.vessel.toLowerCase().includes(query) ||
+        d.crew.toLowerCase().includes(query) ||
+        d.routeOrigin.toLowerCase().includes(query) ||
+        d.routeDest.toLowerCase().includes(query) ||
+        d.status.toLowerCase().includes(query) ||
+        d.package.toLowerCase().includes(query)
+      );
+    }
+    
     return data;
-  }, [allDeliveries, activePackage, statusFilter]);
+  }, [allDeliveries, activePackage, statusFilter, searchQuery]);
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const paginatedData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   
-  useEffect(() => { setCurrentPage(1); }, [activePackage, statusFilter, timeFilter]);
+  // Reset pagination saat filter atau search berubah
+  useEffect(() => { setCurrentPage(1); }, [activePackage, statusFilter, searchQuery, timeFilter]);
 
-  const handleEditClick = (row: Delivery) => {
-    if (row.vessel === "-") return;
-    setEditingRow(row);
-    setEditStatus(row.status);
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingRow) return;
-    // ✅ FIX: Ubah state refresh di background agar modal tidak menutup kasar ke skeleton
-    setIsRefreshing(true);
-    try {
-      await saveEntity('fleet', { status: editStatus }, editingRow.id);
-      showNotification("success", "MATRIX UPDATED", `Status for ${editingRow.receipt} has been successfully updated to ${editStatus}.`);
-      setEditingRow(null);
-      await fetchFleetData(true); // ✅ FIX: Gunakan silent refresh (true) agar Toast tidak hilang unmount
-    } catch (error) {
-      showNotification("error", "WRITE ERROR", "Failed to update shipment status parameters.");
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  // Pengecekan dasar mounting client
   if (!mounted) return null;
 
   return (
     <>
-      {/* === ✅ FIX: TOAST NOTIFICATION UTUH DI LUAR KONDISI SKELETON LOADING === */}
       <AnimatePresence>
         {toast && (
           <motion.div
@@ -260,7 +255,6 @@ function FleetDashboardContent() {
         )}
       </AnimatePresence>
 
-      {/* Kondisi Loading Render UI */}
       {isLoading ? (
         <DashboardSkeleton />
       ) : (
@@ -291,7 +285,7 @@ function FleetDashboardContent() {
                   </div>
                 </div>
                 <div className="bg-[#121317]/80 backdrop-blur-md border border-white/5 border-l-4 border-l-[#FF3B30] p-5 flex flex-col justify-between h-[100px] rounded-r-lg shadow-[-15px_0_30px_-15px_rgba(255,59,48,0.15)]">
-                  <p className="text-[10px] font-grotesk uppercase tracking-[2px] text-white/50">Problem / Delayed</p>
+                  <p className="text-[10px] font-grotesk uppercase tracking-[2px] text-white/50">Not Departed Yet</p>
                   <div className="flex items-baseline gap-3">
                     <span className="font-grotesk font-bold text-4xl leading-none text-[#FF3B30]">{String(topStats.problem).padStart(3, '0')}</span>
                     <span className="text-[#FF3B30]/80 text-[11px] font-bold tracking-widest leading-tight">ACTION<br/>REQ.</span>
@@ -344,9 +338,28 @@ function FleetDashboardContent() {
 
             {(viewMode === "full" || viewMode === "list") && (
               <div className="mt-12 bg-transparent flex flex-col gap-4 flex-1">
-                <div className="flex justify-between items-center mb-2">
+                {/* Header Table & Actions */}
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-2">
                   <h2 className="font-grotesk font-bold text-[18px] uppercase tracking-[2px] text-white flex items-center gap-3">DELIVERY LIST</h2>
-                  <div className="flex gap-3 items-center">
+                  
+                  <div className="flex flex-wrap lg:flex-nowrap gap-3 items-center w-full lg:w-auto">
+                    {/* Search Bar Baru */}
+                    <div className="relative w-full lg:w-[280px]">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Search receipt, vessel, crew..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-[#0a0a0c] border border-white/10 rounded-md py-2.5 pl-9 pr-8 text-[11px] font-mono text-white placeholder-white/30 focus:border-[#B026FF]/50 focus:outline-none transition-colors"
+                      />
+                      {searchQuery && (
+                        <button onClick={() => setSearchQuery("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors">
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
                     <button
                       onClick={() => fetchFleetData(true)}
                       disabled={isRefreshing}
@@ -362,28 +375,28 @@ function FleetDashboardContent() {
                       </div>
                       <AnimatePresence>
                         {isStatusDropdownOpen && (
-                          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute top-full mt-2 w-full bg-[#121317] border border-white/10 rounded-lg shadow-xl z-50 overflow-hidden">
-                            {["ALL", "PENDING", "EN ROUTE", "ARRIVED", "DELAYED", "DELIVERED", "NOT DEPARTED YET"].map(opt => (
+                          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="absolute right-0 lg:left-0 top-full mt-2 w-full min-w-[180px] bg-[#121317] border border-white/10 rounded-lg shadow-xl z-50 overflow-hidden">
+                            {["ALL", "PENDING", "EN ROUTE", "ARRIVED", "DELIVERED", "NOT DEPARTED YET"].map(opt => (
                               <div key={opt} onClick={() => {setStatusFilter(opt); setIsStatusDropdownOpen(false);}} className="px-4 py-3 text-[10px] font-mono text-white/60 hover:text-[#E5B5FF] hover:bg-[#B026FF]/20 cursor-pointer uppercase tracking-widest transition-colors">{opt}</div>
                             ))}
                           </motion.div>
                         )}
-                  </AnimatePresence>
+                      </AnimatePresence>
                     </div>
                   </div>
                 </div>
 
-                <div className="overflow-x-auto w-full">
+                {/* Table */}
+                <div className="overflow-x-auto w-full border border-white/5 rounded-lg bg-[#0a0a0c]/50">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-transparent text-white/40 font-mono text-[10px] uppercase tracking-[2px] border-y border-white/10">
+                      <tr className="bg-transparent text-white/40 font-mono text-[10px] uppercase tracking-[2px] border-b border-white/10">
                         <th className="px-4 py-5 font-normal">VESSEL NAME</th>
                         <th className="px-4 py-5 font-normal text-center">CREW ON BOARD</th>
                         <th className="px-4 py-5 font-normal text-center">PACKAGE TYPES</th>
                         <th className="px-4 py-5 font-normal text-center">ROUTE</th>
                         <th className="px-4 py-5 font-normal text-center">TIME</th>
                         <th className="px-4 py-5 font-normal text-center">STATUS</th>
-                        <th className="px-4 py-5 font-normal text-center">MANUAL CONTROL</th>
                       </tr>
                     </thead>
                     <tbody className="font-mono text-[12px]">
@@ -394,13 +407,25 @@ function FleetDashboardContent() {
                               <div className="flex items-start gap-4">
                                 <div className={`w-2 h-2 rounded-full mt-1.5 ${row.dotColor}`}></div>
                                 <div>
-                                  <p className="text-white font-bold tracking-[2px] mb-1.5 text-[14px] uppercase">{row.vessel}</p>
-                                  <p className="text-[10px] text-white/40 tracking-widest uppercase">RECEIPT: {row.receipt}</p>
+                                  <p className="text-white font-bold tracking-[2px] mb-1.5 text-[14px] uppercase">
+                                    {searchQuery && row.vessel.toLowerCase().includes(searchQuery.toLowerCase()) ? (
+                                      <span dangerouslySetInnerHTML={{ __html: row.vessel.replace(new RegExp(`(${searchQuery})`, 'gi'), '<mark style="background: rgba(176,38,255,0.35); color: #E5B5FF; border-radius: 2px;">$1</mark>') }} />
+                                    ) : row.vessel}
+                                  </p>
+                                  <p className="text-[10px] text-white/40 tracking-widest uppercase">
+                                    RECEIPT: {searchQuery && row.receipt.toLowerCase().includes(searchQuery.toLowerCase()) ? (
+                                      <span dangerouslySetInnerHTML={{ __html: row.receipt.replace(new RegExp(`(${searchQuery})`, 'gi'), '<mark style="background: rgba(176,38,255,0.35); color: #E5B5FF; border-radius: 2px;">$1</mark>') }} />
+                                    ) : row.receipt}
+                                  </p>
                                 </div>
                               </div>
                             </td>
                             <td className="px-4 py-5 text-center">
-                              <span className="inline-block border border-[#B026FF]/30 bg-[#B026FF]/10 text-[#E5B5FF] px-5 py-1.5 rounded-md text-[11px] tracking-widest font-bold uppercase">{row.crew}</span>
+                              <span className="inline-block border border-[#B026FF]/30 bg-[#B026FF]/10 text-[#E5B5FF] px-5 py-1.5 rounded-md text-[11px] tracking-widest font-bold uppercase">
+                                {searchQuery && row.crew.toLowerCase().includes(searchQuery.toLowerCase()) ? (
+                                  <span dangerouslySetInnerHTML={{ __html: row.crew.replace(new RegExp(`(${searchQuery})`, 'gi'), '<mark style="background: rgba(255,255,255,0.2); color: white;">$1</mark>') }} />
+                                ) : row.crew}
+                              </span>
                             </td>
                             <td className="px-4 py-5 text-center text-[#00E3FD] tracking-widest text-[12px] font-bold uppercase">{row.package}</td>
                             <td className="px-4 py-5 text-center">
@@ -421,18 +446,20 @@ function FleetDashboardContent() {
                                 <span className={`w-1.5 h-1.5 rounded-full ${row.dotColor} ${row.isRedBox ? 'animate-pulse' : ''}`}></span>{row.status}
                               </span>
                             </td>
-                            <td className="px-4 py-5 text-center">
-                              <button onClick={() => handleEditClick(row)} className="text-white/40 hover:text-[#B026FF] transition-colors p-2 rounded-full hover:bg-[#B026FF]/10">
-                                <Settings size={20} />
-                              </button>
-                            </td>
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={7}>
+                          <td colSpan={6}>
                             <div className="flex flex-col items-center justify-center py-20">
-                              <p className="text-white/40 font-mono tracking-widest text-sm mb-4">No vessels found.</p>
+                              <p className="text-white/40 font-mono tracking-widest text-sm mb-4">
+                                {searchQuery ? `No vessels match "${searchQuery}"` : "No vessels found."}
+                              </p>
+                              {searchQuery && (
+                                <button onClick={() => setSearchQuery("")} className="text-[#B026FF] text-[10px] font-mono border border-[#B026FF]/50 px-4 py-2 rounded-md hover:bg-[#B026FF]/10 transition-colors uppercase tracking-widest">
+                                  Clear Search
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -444,55 +471,24 @@ function FleetDashboardContent() {
                 {filteredData.length > 0 && (
                   <div className="bg-transparent flex justify-end items-center py-2 text-white/40 font-mono text-[11px] tracking-widest uppercase">
                     <div className="flex items-center gap-4">
-                      <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="hover:text-[#E5B5FF] disabled:opacity-30 transition-colors px-2 cursor-pointer disabled:cursor-not-allowed uppercase">Previous</button>
+                      <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="hover:text-[#E5B5FF] disabled:opacity-30 transition-colors px-2 cursor-pointer disabled:cursor-not-allowed uppercase font-bold">Previous</button>
                       <div className="flex gap-2">
                         {(() => {
                           const pageWindow = 5;
                           let start = Math.max(1, currentPage - Math.floor(pageWindow / 2));
                           let end = Math.min(totalPages, start + pageWindow - 1);
                           return Array.from({ length: end - start + 1 }, (_, i) => start + i).map(num => (
-                            <button key={num} onClick={() => setCurrentPage(num)} className={`px-3 py-1 rounded-md transition-colors ${currentPage === num ? "border border-[#B026FF] text-[#E5B5FF] bg-[#B026FF]/20 shadow-[0_0_10px_rgba(176,38,255,0.2)]" : "hover:text-white hover:bg-white/5"}`}>{num.toString().padStart(2, '0')}</button>
+                            <button key={num} onClick={() => setCurrentPage(num)} className={`px-3 py-1 rounded-md transition-colors ${currentPage === num ? "border border-[#B026FF] text-[#E5B5FF] bg-[#B026FF]/20 shadow-[0_0_10px_rgba(176,38,255,0.2)] font-bold" : "hover:text-white hover:bg-white/5"}`}>{num.toString().padStart(2, '0')}</button>
                           ));
                         })()}
                       </div>
-                      <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="hover:text-[#E5B5FF] disabled:opacity-30 transition-colors px-2 cursor-pointer disabled:cursor-not-allowed uppercase">Next</button>
+                      <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} className="hover:text-[#E5B5FF] disabled:opacity-30 transition-colors px-2 cursor-pointer disabled:cursor-not-allowed uppercase font-bold">Next</button>
                     </div>
                   </div>
                 )}
               </div>
             )}
           </motion.div>
-
-          <AnimatePresence>
-            {editingRow && (
-              <div className="fixed inset-0 z-[110] flex items-center justify-center px-4">
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setEditingRow(null)} className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer" />
-                <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative bg-[#0a0a0c] border border-[#B026FF]/30 rounded-xl p-8 max-w-md w-full shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10">
-                  <button onClick={() => setEditingRow(null)} className="absolute top-4 right-4 text-white/40 hover:text-[#B026FF] transition-colors"><X size={20} /></button>
-                  <h2 className="text-white font-grotesk font-bold text-xl tracking-[2px] uppercase mb-1 flex items-center gap-3"><Settings size={22} className="text-[#B026FF]"/> Manual Control</h2>
-                  <p className="text-[#00E3FD] font-mono text-[11px] tracking-widest mb-8 uppercase">Receipt: {editingRow.receipt}</p>
-                  <div className="flex flex-col gap-6 mb-8">
-                    <div>
-                      <label className="text-[10px] font-bold text-white/40 tracking-[3px] uppercase mb-2 block font-mono">VESSEL NAME (Read Only)</label>
-                      <input type="text" readOnly value={editingRow.vessel} className="w-full bg-[#121317]/50 border border-white/5 rounded px-4 py-3 text-white/50 font-inter text-[13px] cursor-not-allowed uppercase" />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-white/40 tracking-[3px] uppercase mb-2 block font-mono">DELIVERY STATUS</label>
-                      <div className="relative">
-                        <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)} className="w-full bg-[#121317] border border-white/10 rounded px-4 py-3 text-[13px] text-white appearance-none outline-none focus:border-[#B026FF] transition-colors cursor-pointer">
-                          {["PENDING", "EN ROUTE", "ARRIVED", "DELIVERED", "DELAYED", "NOT DEPARTED YET"].map(st => (
-                            <option key={st} value={st} className="bg-[#121317]">{st}</option>
-                          ))}
-                        </select>
-                        <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
-                      </div>
-                    </div>
-                  </div>
-                  <button onClick={handleSaveEdit} className="w-full py-3.5 bg-gradient-to-r from-[#B026FF] to-[#00E3FD] text-white rounded-md hover:opacity-90 font-grotesk text-[13px] font-bold uppercase tracking-[2px] transition-opacity flex justify-center items-center gap-2 shadow-[0_0_15px_rgba(176,38,255,0.3)]">Save Status</button>
-                </motion.div>
-              </div>
-            )}
-          </AnimatePresence>
         </main>
       )}
     </>
