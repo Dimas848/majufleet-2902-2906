@@ -238,6 +238,8 @@ export async function saveEntity(entityType: string, data: any, editingId: numbe
         gender: data.gender || null,
         age: data.age ? parseInt(data.age) : null,
         origin: data.origin || null,
+        // ✅ INTEGRASI FIX PASSWORD: Mengambil password form khusus crew, jika kosong default "maju123"
+        password: data.password || "maju123",
       };
 
       if (isUpdating) {
@@ -481,9 +483,9 @@ export async function confirmInvoicePayment(invoiceId: number, shipmentId: numbe
   try {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Ubah status Invoice jadi Paid
-      await tx.invoice.update({
-        where: { id: Number(invoiceId) },
-        data: { status: "Paid" }
+      await tx.shipment.update({
+      where: { id: Number(shipmentId) },
+      data: { status: "PENDING" } // 🔒 Ubah ke PENDING agar admin yang mengubahnya nanti ke NOT DEPARTED YET setelah kapal diisi
       });
 
       // 2. Ubah status Kargo jadi Siap Berangkat
@@ -675,5 +677,61 @@ export async function getAnalyticsByTime(chartTimeFilter: "Day" | "Week" | "Mont
   } catch (error) {
     console.error("Gagal menarik data Analytics dinamis dari Neon:", error);
     return [];
+  }
+}
+
+export async function updateUserProfile(userId: number, data: { name: string; phone: string; address: string; password?: string }) {
+  try {
+    const updateData: any = {
+      name: data.name,
+      phone: data.phone || null,
+      address: data.address || null,
+    };
+
+    // Jika admin/crew mengisi kolom password baru, ikut masukkan ke database
+    if (data.password && data.password.trim() !== "") {
+      updateData.password = data.password;
+    }
+
+    await prisma.user.update({
+      where: { id: Number(userId) },
+      data: updateData,
+    });
+
+    // Segarkan cache halaman setelah data berubah
+    revalidatePath("/Dashboard-Admin/profile");
+    return { success: true, message: "Profile core matrices synchronized successfully." };
+  } catch (error) {
+    console.error("Gagal mengupdate profil user:", error);
+    return { success: false, message: "Database write fault encountered." };
+  }
+}
+
+export async function changeUserPassword(userId: number, data: { oldPassword: string; newPassword: string }) {
+  try {
+    // 1. Cari user di database Neon
+    const user = await prisma.user.findUnique({
+      where: { id: Number(userId) }
+    });
+
+    if (!user) {
+      return { success: false, message: "User node not found." };
+    }
+
+    // 2. Verifikasi apakah password lama yang dimasukkan sesuai
+    if (user.password !== data.oldPassword) {
+      return { success: false, message: "Current access key verification failed. Incorrect password." };
+    }
+
+    // 3. Jika cocok, update dengan password baru
+    await prisma.user.update({
+      where: { id: Number(userId) },
+      data: { password: data.newPassword }
+    });
+
+    return { success: true, message: "Access credentials updated successfully." };
+  } catch (error) {
+    console.error("Gagal memperbarui password:", error);
+    return { success: false, message: "Database write fault encountered." };
   }
 }

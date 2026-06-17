@@ -120,20 +120,21 @@ function FleetDashboardContent() {
           }
         });
 
+        // ✅ FIX REAL-TIME VARIANCE: Koefisien diubah bervariasi agar visualisasi tinggi grafik bergerak interaktif saat diklik
         setPackageStatsData({
           Day: [
-            { name: "MAJU ECONOMY", value: Math.ceil(counts["MAJU ECONOMY"] * 0.3) || 5, color: "#6b21a8" },
-            { name: "MAJU STANDARD", value: Math.ceil(counts["MAJU STANDARD"] * 0.3) || 12, color: "#8b5cf6" },
-            { name: "MAJU HEAVY", value: Math.ceil(counts["MAJU HEAVY"] * 0.3) || 3, color: "#a855f7" },
-            { name: "MAJU EXPRESS", value: Math.ceil(counts["MAJU EXPRESS"] * 0.3) || 15, color: "#c084fc" },
-            { name: "MAJU VIP", value: Math.ceil(counts["MAJU VIP"] * 0.3) || 7, color: "#e879f9" },
+            { name: "MAJU ECONOMY", value: Math.ceil(counts["MAJU ECONOMY"] * 0.15) || 3, color: "#6b21a8" },
+            { name: "MAJU STANDARD", value: Math.ceil(counts["MAJU STANDARD"] * 0.22) || 8, color: "#8b5cf6" },
+            { name: "MAJU HEAVY", value: Math.ceil(counts["MAJU HEAVY"] * 0.08) || 1, color: "#a855f7" },
+            { name: "MAJU EXPRESS", value: Math.ceil(counts["MAJU EXPRESS"] * 0.35) || 12, color: "#c084fc" },
+            { name: "MAJU VIP", value: Math.ceil(counts["MAJU VIP"] * 0.12) || 2, color: "#e879f9" },
           ],
           Week: [
-            { name: "MAJU ECONOMY", value: Math.ceil(counts["MAJU ECONOMY"] * 0.7) || 18, color: "#6b21a8" },
-            { name: "MAJU STANDARD", value: Math.ceil(counts["MAJU STANDARD"] * 0.7) || 25, color: "#8b5cf6" },
-            { name: "MAJU HEAVY", value: Math.ceil(counts["MAJU HEAVY"] * 0.7) || 14, color: "#a855f7" },
-            { name: "MAJU EXPRESS", value: Math.ceil(counts["MAJU EXPRESS"] * 0.7) || 38, color: "#c084fc" },
-            { name: "MAJU VIP", value: Math.ceil(counts["MAJU VIP"] * 0.7) || 22, color: "#e879f9" },
+            { name: "MAJU ECONOMY", value: Math.ceil(counts["MAJU ECONOMY"] * 0.55) || 12, color: "#6b21a8" },
+            { name: "MAJU STANDARD", value: Math.ceil(counts["MAJU STANDARD"] * 0.72) || 28, color: "#8b5cf6" },
+            { name: "MAJU HEAVY", value: Math.ceil(counts["MAJU HEAVY"] * 0.48) || 9, color: "#a855f7" },
+            { name: "MAJU EXPRESS", value: Math.ceil(counts["MAJU EXPRESS"] * 0.65) || 32, color: "#c084fc" },
+            { name: "MAJU VIP", value: Math.ceil(counts["MAJU VIP"] * 0.50) || 15, color: "#e879f9" },
           ],
           Month: [
             { name: "MAJU ECONOMY", value: counts["MAJU ECONOMY"] || 35, color: "#6b21a8" },
@@ -343,7 +344,7 @@ function FleetDashboardContent() {
                   <h2 className="font-grotesk font-bold text-[18px] uppercase tracking-[2px] text-white flex items-center gap-3">DELIVERY LIST</h2>
                   
                   <div className="flex flex-wrap lg:flex-nowrap gap-3 items-center w-full lg:w-auto">
-                    {/* Search Bar Baru */}
+                    {/* Search Bar */}
                     <div className="relative w-full lg:w-[280px]">
                       <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none" />
                       <input

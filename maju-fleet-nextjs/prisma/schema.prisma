@@ -10,21 +10,23 @@ datasource db {
 }
 
 model User {
-  id        Int        @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   name      String
-  email     String     @unique
-  password  String?    @default("maju123") // Kolom password manual wajib ada di sini
+  email     String   @unique
+  password  String?  @default("maju123") // Kolom password manual wajib ada di sini
   phone     String?
   
   // Tambahan untuk Crew & Customer dari UI baru
-  role      String     @default("customer") // "customer", "captain", "navigator", dll
-  gender    String?    // "male", "female"
+  role      String   @default("customer") // "customer", "captain", "navigator", dll
+  gender    String?  // "male", "female"
   age       Int?
   origin    String?
   address   String?
-  status    String     @default("Active") // "Active", "Inactive"
+  status    String   @default("Active") // "Active", "Inactive"
 
-  shipments Shipment[]
+  // ✅ SOLUSI: Pisah menjadi 2 relasi bernama agar Prisma tidak melontarkan error
+  shipments          Shipment[] @relation("ShipmentOwner")
+  captainedShipments Shipment[] @relation("ShipmentCaptain")
 }
 
 model Vessel {
@@ -63,30 +65,34 @@ model Invoice {
 }
 
 model Shipment {
-  id             Int      @id @default(autoincrement())
-  receipt_number String   @unique
-  status         String   @default("PENDING")
-  book_date      DateTime @default(now())
-  captain        String?
+  id              Int            @id @default(autoincrement())
+  receipt_number  String         @unique
+  status          String         @default("PENDING")
+  book_date       DateTime       @default(now())
 
+  // Relasi Master
+  userId          Int?
+  // ✅ Diberi nama "ShipmentOwner" agar tidak bentrok dengan relasi kapten
+  user            User?          @relation("ShipmentOwner", fields: [userId], references: [id])
+  
+  // ✅ SINKRONISASI RELASI: Mengubah teks kapten biasa menjadi ID yang terikat ke tabel User
+  captainId       Int?
+  captain         User?          @relation("ShipmentCaptain", fields: [captainId], references: [id])
 
-  // Relasi Master (Bisa opsional jika diisi manual dari form)
-  userId         Int?
-  user           User?    @relation(fields: [userId], references: [id])
-  vesselId       Int?
-  vessel         Vessel?  @relation(fields: [vesselId], references: [id])
-  originId       Int?
-  origin         Port?    @relation("OriginPort", fields: [originId], references: [id])
-  destId         Int?
-  dest           Port?    @relation("DestPort", fields: [destId], references: [id])
+  vesselId        Int?
+  vessel          Vessel?        @relation(fields: [vesselId], references: [id])
+  originId        Int?
+  origin          Port?          @relation("OriginPort", fields: [originId], references: [id])
+  destId          Int?
+  dest            Port?          @relation("DestPort", fields: [destId], references: [id])
 
   // Data Pengirim (Dari UI Form Baru)
-  senderName     String?
-  senderContact  String?
-  senderEmail    String?
-  senderAddress  String?
-  senderCountry  String?
-  senderCity     String?
+  senderName      String?
+  senderContact   String?
+  senderEmail     String?
+  senderAddress   String?
+  senderCountry   String?
+  senderCity      String?
 
   // Data Penerima (Dari UI Form Baru)
   recipientName    String?
@@ -97,16 +103,14 @@ model Shipment {
   recipientCity    String?
 
   // Detail Kargo (Dari UI Form Baru)
-  cargoDesc      String?
-  weight         Float?
-  weightUnit     String   @default("KG") // "KG", "TON", "LBS"
-  dimensions     Float?
-  category       String?
+  cargoDesc       String?
+  weight          Float?
+  weightUnit      String         @default("KG") // "KG", "TON", "LBS"
+  dimensions      Float?
+  category        String?
 
-  items          ShipmentItem[]
-  details        ShipmentDetail[]
-
-  invoice        Invoice?       
+  items           ShipmentItem[]
+  details         ShipmentDetail[]
 }
 
 model PackageType {
@@ -123,8 +127,9 @@ model ShipmentItem {
   weight_kg     Float
   description   String?
 
-  shipment      Shipment    @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  packageType   PackageType @relation(fields: [packageTypeId], references: [id])
+  shipment      Shipment     @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  packageTypeId Int
+  packageType   PackageType  @relation(fields: [packageTypeId], references: [id])
 }
 
 model ShipmentDetail {

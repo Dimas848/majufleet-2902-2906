@@ -34,7 +34,6 @@ function AdminControlContent() {
 
   const [formData, setFormData] = useState<any>({});
   
-  // Melacak status awal kargo sebelum diedit untuk mengunci state machine pengiriman
   const [initialStatus, setInitialStatus] = useState<string>("");
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -42,14 +41,17 @@ function AdminControlContent() {
 
   const [toast, setToast] = useState<{ type: "success" | "error"; title: string; message: string } | null>(null);
 
-  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; targetId: number | null }>({
+  const [isDirty, setIsDirty] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+
+  const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; targetId: number | null; visualCode: string }>({
     isOpen: false,
-    targetId: null
+    targetId: null,
+    visualCode: ""
   });
 
   const isUpdating = editingId !== null;
 
-  // Efek auto-dismiss untuk toast notification (menghilang otomatis dalam 4 detik)
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 4000);
@@ -68,10 +70,22 @@ function AdminControlContent() {
       setViewMode("table");
       setSearchQuery("");
       setFleetStatusFilter("ALL");
+      setIsDirty(false);
     }
   }, [searchParams]);
 
   useEffect(() => { setCurrentPage(1); }, [activeTab, searchQuery, fleetStatusFilter]);
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (viewMode === "form" && isDirty) {
+        e.preventDefault();
+        e.returnValue = "Unsaved configurations matrix detected.";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [viewMode, isDirty]);
 
   const fetchNeonData = async () => {
     setIsLoading(true);
@@ -79,16 +93,21 @@ function AdminControlContent() {
       const dbData = await getAllData();
       
       if (dbData.shipments) {
-        setShipments(dbData.shipments.map((s: any) => ({
-          id: s.id,
-          code: s.receipt_number || `MJF-${s.id}`,
-          senderName: s.user?.name || s.senderName || "No Name",
-          senderCity: s.senderCity || "Jakarta",
-          recipientName: s.recipientName || "Client",
-          recipientCity: s.recipientCity || "Rotterdam",
-          status: s.status === "DELAYED" ? "PENDING" : (s.status || "PENDING"), 
-          ...s 
-        })));
+        setShipments(dbData.shipments.map((s: any) => {
+          // ✅ FIX LOGIKA 1: Pastikan status awal kargo baru murni bernilai "PENDING"
+          const determinedStatus = s.status === "DELAYED" ? "PENDING" : (s.status || "PENDING");
+          
+          return {
+            id: s.id,
+            code: s.receipt_number || `MJF-${s.id}`,
+            senderName: s.user?.name || s.senderName || "No Name",
+            senderCity: s.senderCity || "Jakarta",
+            recipientName: s.recipientName || "Client",
+            recipientCity: s.recipientCity || "Rotterdam",
+            status: determinedStatus,
+            ...s 
+          };
+        }));
       }
 
       if (dbData.crews) setCrews(dbData.crews);
@@ -106,16 +125,36 @@ function AdminControlContent() {
     fetchNeonData();
   }, [activeTab, viewMode]);
 
-  const generateCode = (prefix: string) => {
-    const randomNum = Math.floor(100000 + Math.random() * 900000);
-    setFormData({ ...formData, code: `${prefix}-${randomNum}` });
-    clearError("code");
+  const getVisualCode = (tab: string, id: number) => {
+    let arr: any[] = [];
+    let prefix = "";
+    if (tab === "crew") { arr = crews; prefix = "CRW"; }
+    else if (tab === "customer") { arr = customers; prefix = "CUST"; }
+    else if (tab === "vessel") { arr = vessels; prefix = "VSL"; }
+    else return `FLT-${id}`; 
+
+    const sorted = [...arr].sort((a, b) => a.id - b.id);
+    const index = sorted.findIndex(item => item.id === id);
+    return `${prefix}-${index + 1}`;
   };
 
   const handleAddNew = () => {
     setEditingId(null);
     setInitialStatus("");
-    setFormData(activeTab === "fleet" ? { weightUnit: "KG", status: "PENDING", packageTypeId: "2", vesselId: "", captain: "" } : activeTab === "vessel" ? { capacityUnit: "TONNES" } : {});
+    setIsDirty(false);
+    
+    let initialData: any = {};
+    if (activeTab === "fleet") {
+      initialData = { weightUnit: "KG", status: "PENDING", packageTypeId: "2", vesselId: "", captain: "" };
+    } else if (activeTab === "vessel") {
+      initialData = { visualCode: `VSL-${vessels.length + 1}`, capacityUnit: "TONNES" };
+    } else if (activeTab === "crew") {
+      initialData = { visualCode: `CRW-${crews.length + 1}` }; 
+    } else if (activeTab === "customer") {
+      initialData = { visualCode: `CUST-${customers.length + 1}` };
+    }
+    
+    setFormData(initialData);
     setFormErrors({});
     setGeneralError(null);
     setViewMode("form");
@@ -123,26 +162,49 @@ function AdminControlContent() {
 
   const handleEdit = (item: any) => {
     setEditingId(item.id);
+    setIsDirty(false);
     const currentPackageId = item.items && item.items.length > 0 ? String(item.items[0].packageTypeId) : "2";
     
-    const currentStatus = item.status === "DELAYED" ? "PENDING" : (item.status || "PENDING");
+    // ✅ FIX LOGIKA 2: Jika status kargo masih PENDING, paksa vesselId & captain bernilai KOSONG ("") di form console
+    const currentStatus = item.status || "PENDING";
+    const isPending = currentStatus === "PENDING";
     setInitialStatus(currentStatus);
 
-    setFormData({ ...item, packageTypeId: currentPackageId, status: currentStatus, vesselId: item.vesselId ? String(item.vesselId) : "" });
+    const visualCode = activeTab === "fleet" ? item.code : getVisualCode(activeTab, item.id);
+
+    setFormData({ 
+      ...item, 
+      visualCode, 
+      packageTypeId: currentPackageId, 
+      status: currentStatus, 
+      vesselId: isPending ? "" : (item.vesselId ? String(item.vesselId) : ""),
+      captain: isPending ? "" : (item.captain || "")
+    });
     setFormErrors({});
     setGeneralError(null);
     setViewMode("form");
   };
 
+  const handleBackToTable = () => {
+    if (viewMode === "form" && isDirty) {
+      setShowLeaveModal(true); 
+    } else {
+      setViewMode("table");
+    }
+  };
+
   const openDeleteConfirmation = (id: number) => {
-    setDeleteModal({ isOpen: true, targetId: id });
+    const visualCode = activeTab === "fleet" 
+       ? shipments.find(s => s.id === id)?.code 
+       : getVisualCode(activeTab, id);
+    setDeleteModal({ isOpen: true, targetId: id, visualCode: visualCode || "" });
   };
 
   const executeDeleteData = async () => {
     if (!deleteModal.targetId) return;
     
     const id = deleteModal.targetId;
-    setDeleteModal({ isOpen: false, targetId: null }); 
+    setDeleteModal({ isOpen: false, targetId: null, visualCode: "" }); 
     setIsLoading(true);
     
     try {
@@ -196,7 +258,17 @@ function AdminControlContent() {
       if (!formData.age || parseInt(formData.age) <= 0) errors.age = "Please enter a valid age.";
       if (!formData.role) errors.role = "Please select a specialist role.";
       if (!formData.origin) errors.origin = "Please enter origin city/country.";
-      if (!formData.contact) errors.contact = "Please enter contact number.";
+      
+      if (!formData.contact) {
+        errors.contact = "Please enter contact number.";
+      } else if (!/^\+?[0-9]+$/.test(formData.contact)) {
+        errors.contact = "Contact number must contain digits only, with an optional '+' at the beginning.";
+      } else {
+        const digitCount = formData.contact.replace(/\D/g, "").length;
+        if (digitCount < 3 || digitCount > 12) {
+          errors.contact = "Contact number must be between 3 and 12 digits.";
+        }
+      }
     } else if (activeTab === "vessel") {
       if (!formData.name) errors.name = "Please enter vessel name.";
       if (!formData.capacity || parseFloat(formData.capacity) <= 0) errors.capacity = "Please enter a valid capacity.";
@@ -220,6 +292,7 @@ function AdminControlContent() {
         showNotification("success", "MATRIX SYNCHRONIZED", `Data parameter adjustments successfully compiled and committed.`);
         setFormData({});
         setEditingId(null);
+        setIsDirty(false);
         fetchNeonData();
         setViewMode("table");
       } else {
@@ -235,6 +308,7 @@ function AdminControlContent() {
 
   const updateField = (field: string, value: any) => {
     setFormData({ ...formData, [field]: value });
+    setIsDirty(true); 
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: "" }));
     }
@@ -257,13 +331,6 @@ function AdminControlContent() {
     return <p className="text-[#FF3B30] text-[11px] font-mono mt-2 flex items-center gap-1.5"><AlertCircle size={12}/> {error}</p>;
   };
 
-  const getSummaryCode = (tab: string, id: number) => {
-    if (tab === "fleet") return `FLT-${id}`;
-    if (tab === "crew") return `CRW-${id}`;
-    if (tab === "customer") return `CUST-${id}`;
-    return `VSL-${id}`;
-  };
-
   const getTitle = () => {
     switch (activeTab) {
       case "fleet": return "FLEET & SHIPMENTS DATA";
@@ -274,11 +341,15 @@ function AdminControlContent() {
     }
   };
 
-  const filterData = (arr: any[], keys: string[], prefix: string = "") => {
+  const filterData = (arr: any[], keys: string[], prefix: string = "", tab: string = "") => {
     if (!searchQuery) return arr;
     const query = searchQuery.toLowerCase();
     
     return arr.filter(item => {
+      if (tab && prefix) {
+        const visualCode = getVisualCode(tab, item.id).toLowerCase();
+        if (visualCode.includes(query)) return true;
+      }
       if (prefix && `${prefix}-${item.id}`.toLowerCase().includes(query)) return true;
       if (String(item.id).includes(query)) return true;
       return keys.some(key => String(item[key] || '').toLowerCase().includes(query));
@@ -392,17 +463,64 @@ function AdminControlContent() {
       <AnimatePresence>
         {deleteModal.isOpen && (
           <div className="fixed inset-0 z-[99999] flex items-center justify-center px-4">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDeleteModal({ isOpen: false, targetId: null })} className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setDeleteModal({ isOpen: false, targetId: null, visualCode: "" })} className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer" />
             <motion.div initial={{ opacity: 0, scale: 0.9, y: 15 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 15 }} className="relative w-full max-w-[440px] bg-[#0c0d12] border border-[#FF3B30]/30 rounded-xl p-8 shadow-[0_0_50px_rgba(255,59,48,0.15)] overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-[4px] bg-[#FF3B30]" />
               <div className="flex flex-col items-center text-center">
                 <div className="w-12 h-12 rounded-full bg-[#FF3B30]/10 border border-[#FF3B30]/20 flex items-center justify-center text-[#FF3B30] mb-5 shadow-[0_0_15px_rgba(255,59,48,0.1)]"><Trash size={22} /></div>
                 <h3 className="font-grotesk font-bold text-white text-xl tracking-[1px] uppercase mb-2">TERMINATE SYSTEM RECORD</h3>
-                <p className="text-white/40 font-mono text-[10px] tracking-[2px] uppercase mb-4 text-[#FF3B30]/80 font-bold">TARGET ADDR: {getSummaryCode(activeTab, deleteModal.targetId || 0)}</p>
+                <p className="text-white/40 font-mono text-[10px] tracking-[2px] uppercase mb-4 text-[#FF3B30]/80 font-bold">TARGET ADDR: {deleteModal.visualCode}</p>
                 <p className="text-white/60 font-inter text-[13px] leading-relaxed mb-8">Are you sure you want to permanently alter this sequence? Canceled shipments will be safely archived to background historical files.</p>
                 <div className="flex gap-4 w-full">
-                  <button type="button" onClick={() => setDeleteModal({ isOpen: false, targetId: null })} className="flex-1 py-3 border border-white/10 rounded text-white/60 hover:text-white hover:bg-white/5 font-mono text-[11px] font-bold tracking-[2px] uppercase transition-colors">ABORT</button>
+                  <button type="button" onClick={() => setDeleteModal({ isOpen: false, targetId: null, visualCode: "" })} className="flex-1 py-3 border border-white/10 rounded text-white/60 hover:text-white hover:bg-white/5 font-mono text-[11px] font-bold tracking-[2px] uppercase transition-colors">ABORT</button>
                   <button type="button" onClick={executeDeleteData} className="flex-1 py-3 bg-[#FF3B30]/10 border border-[#FF3B30]/40 text-[#FF3B30] rounded font-mono text-[11px] font-bold tracking-[2px] uppercase hover:bg-[#FF3B30] hover:text-white shadow-[0_0_15px_rgba(255,59,48,0.2)] transition-all">PURGE DATA</button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showLeaveModal && (
+          <div className="fixed inset-0 z-[999999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#0c0d12] border border-[#FF3B30]/30 w-full max-w-[450px] rounded-xl p-6 shadow-[0_0_50px_rgba(255,59,48,0.15)] relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-0 w-full h-[3px] bg-[#FF3B30]" />
+              <div className="flex gap-4 items-start">
+                <div className="p-2 bg-[#FF3B30]/10 rounded-lg shrink-0">
+                  <AlertCircle className="text-[#FF3B30]" size={24} />
+                </div>
+                <div>
+                  <h3 className="font-mono text-xs font-bold tracking-[3px] text-[#FF3B30] uppercase mb-2">UNCOMMITTED CONFIGURATIONS</h3>
+                  <p className="text-white/80 text-[13px] leading-relaxed mb-6 font-inter">
+                    You have modified master data streams in this terminal box. Leaving now will drop all uncommitted transaction nodes. Do you want to discard your changes?
+                  </p>
+                  
+                  <div className="flex justify-end gap-3 font-mono text-[11px] tracking-widest uppercase">
+                    <button 
+                      type="button"
+                      onClick={() => setShowLeaveModal(false)}
+                      className="px-4 py-2.5 border border-white/10 rounded-md text-white/50 hover:text-white hover:bg-white/5 transition-colors"
+                    >
+                      Resume Build
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        setIsDirty(false);
+                        setShowLeaveModal(false);
+                        setViewMode("table");
+                      }}
+                      className="px-5 py-2.5 bg-[#FF3B30] text-white font-bold rounded-md hover:bg-[#FF3B30]/90 transition-colors shadow-[0_0_15px_rgba(255,59,48,0.3)]"
+                    >
+                      Discard Changes
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -441,7 +559,11 @@ function AdminControlContent() {
           </div>
           
           {activeTab !== "customer" && activeTab !== "fleet" && (
-            <button onClick={() => viewMode === "table" ? handleAddNew() : setViewMode("table")} className="px-6 py-2.5 bg-[#B026FF]/10 text-[#E5B5FF] border border-[#B026FF]/30 rounded text-sm font-bold tracking-[2px] uppercase hover:bg-[#B026FF]/20 transition-all flex items-center justify-center gap-2">
+            <button 
+              type="button"
+              onClick={() => viewMode === "table" ? handleAddNew() : handleBackToTable()}
+              className="px-6 py-2.5 bg-[#B026FF]/10 text-[#E5B5FF] border border-[#B026FF]/30 rounded text-sm font-bold tracking-[2px] uppercase hover:bg-[#B026FF]/20 transition-all flex items-center justify-center gap-2"
+            >
               {viewMode === "table" ? <><Plus size={16} /> ADD NEW DATA</> : <><Users size={16} /> VIEW DATA</>}
             </button>
           )}
@@ -484,74 +606,84 @@ function AdminControlContent() {
                       }
 
                       const { paginated } = paginate(filtered);
-                      return paginated.map(s => (
-                        <tr key={s.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
-                          <td className="p-4 text-sm font-mono text-white/70">{s.code}</td>
-                          <td className="p-4 text-sm text-white">{s.senderName} ({s.senderCity}) → {s.recipientName} ({s.recipientCity})</td>
-                          <td className="p-4">
-                            <span className={`px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-full border ${getStatusBadgeStyle(s.status)}`}>{s.status}</span>
-                          </td>
-                          <td className="p-4 flex justify-end gap-3">
-                            {/* ✅ MODIFIKASI: Hanya ada tombol Edit untuk data Fleet, tombol hapus dihilangkan secara permanen */}
-                            <button type="button" onClick={() => handleEdit(s)} className="text-white/40 hover:text-[#a2d2ff] transition-colors p-1.5 rounded hover:bg-[#a2d2ff]/10 flex items-center gap-1 text-[11px] font-mono tracking-widest uppercase font-bold"><Edit size={16} /></button>
-                          </td>
-                        </tr>
-                      ));
+                      return paginated.map(s => {
+                        return (
+                          <tr key={s.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                            <td className="p-4 text-sm font-mono text-white/70">{s.code}</td>
+                            <td className="p-4 text-sm text-white">{s.senderName} ({s.senderCity}) → {s.recipientName} ({s.recipientCity})</td>
+                            <td className="p-4">
+                              <span className={`px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-full border ${getStatusBadgeStyle(s.status)}`}>{s.status}</span>
+                            </td>
+                            <td className="p-4 flex justify-end gap-3">
+                              <button type="button" onClick={() => handleEdit(s)} className="text-white/40 hover:text-[#a2d2ff] transition-colors p-1.5 rounded hover:bg-[#a2d2ff]/10 flex items-center gap-1 text-[11px] font-mono tracking-widest uppercase font-bold"><Edit size={16} /></button>
+                            </td>
+                          </tr>
+                        );
+                      });
                     })()}
 
                     {activeTab === "customer" && (() => {
-                      const filtered = filterData(customers, ['name', 'email', 'phone'], 'CUST');
+                      const filtered = filterData(customers, ['name', 'email', 'phone'], 'CUST', 'customer');
                       if (filtered.length === 0) return <tr><td colSpan={4} className="text-center py-10 text-white/40 font-mono">NO RECORDS</td></tr>;
                       const { paginated } = paginate(filtered);
-                      return paginated.map(c => (
-                        <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
-                          <td className="p-4 text-sm font-mono text-white/70 align-top">CUST-{c.id}</td>
-                          <td className="p-4 text-sm text-white">
-                            <span className="font-bold text-[15px]">{c.name}</span>
-                            <div className="flex flex-col gap-1 mt-2 text-white/50">
-                              <span className="flex items-center gap-2 text-xs"><Mail size={12}/> {c.email}</span>
-                              <span className="flex items-center gap-2 text-xs"><Phone size={12}/> {c.phone || "-"}</span>
-                              <span className="flex items-center gap-2 text-xs"><MapPin size={12}/> {c.address || "-"}</span>
-                            </div>
-                          </td>
-                          <td className="p-4 align-top"><span className="flex items-center gap-2 px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-full bg-green-500/10 text-green-400 border border-green-500/20 w-max"><CheckCircle size={12}/> {c.status || 'Active'}</span></td>
-                          <td className="p-4 flex justify-end gap-3 align-top"><button type="button" onClick={() => openDeleteConfirmation(c.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button></td>
-                        </tr>
-                      ));
+                      return paginated.map(c => {
+                        const visualCode = getVisualCode("customer", c.id);
+                        return (
+                          <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                            <td className="p-4 text-sm font-mono text-white/70 align-top">{visualCode}</td>
+                            <td className="p-4 text-sm text-white">
+                              <span className="font-bold text-[15px]">{c.name}</span>
+                              <div className="flex flex-col gap-1 mt-2 text-white/50">
+                                <span className="flex items-center gap-2 text-xs"><Mail size={12}/> {c.email}</span>
+                                <span className="flex items-center gap-2 text-xs"><Phone size={12}/> {c.phone || "-"}</span>
+                                <span className="flex items-center gap-2 text-xs"><MapPin size={12}/> {c.address || "-"}</span>
+                              </div>
+                            </td>
+                            <td className="p-4 align-top"><span className="flex items-center gap-2 px-3 py-1 text-[10px] font-bold tracking-wider uppercase rounded-full bg-green-500/10 text-green-400 border border-green-500/20 w-max"><CheckCircle size={12}/> {c.status || 'Active'}</span></td>
+                            <td className="p-4 flex justify-end gap-3 align-top"><button type="button" onClick={() => openDeleteConfirmation(c.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button></td>
+                          </tr>
+                        );
+                      });
                     })()}
 
                     {activeTab === "crew" && (() => {
-                      const filtered = filterData(crews, ['name', 'email', 'role'], 'CRW');
+                      const filtered = filterData(crews, ['name', 'email', 'role'], 'CRW', 'crew');
                       if (filtered.length === 0) return <tr><td colSpan={4} className="text-center py-10 text-white/40 font-mono">NO RECORDS</td></tr>;
                       const { paginated } = paginate(filtered);
-                      return paginated.map(c => (
-                        <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
-                          <td className="p-4 text-sm font-mono text-white/70">CRW-{c.id}</td>
-                          <td className="p-4 text-sm text-white">{c.name} <br/><span className="text-xs text-white/40">{c.email}</span></td>
-                          <td className="p-4 text-sm text-white/50 uppercase">{c.role ? c.role.replace(/_/g, ' ') : 'crew'}</td>
-                          <td className="p-4 flex justify-end gap-3">
-                            <button type="button" onClick={() => handleEdit(c)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
-                            <button type="button" onClick={() => openDeleteConfirmation(c.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
-                          </td>
-                        </tr>
-                      ));
+                      return paginated.map(c => {
+                        const visualCode = getVisualCode("crew", c.id);
+                        return (
+                          <tr key={c.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                            <td className="p-4 text-sm font-mono text-white/70">{visualCode}</td>
+                            <td className="p-4 text-sm text-white">{c.name} <br/><span className="text-xs text-white/40">{c.email}</span></td>
+                            <td className="p-4 text-sm text-white/50 uppercase">{c.role ? c.role.replace(/_/g, ' ') : 'crew'}</td>
+                            <td className="p-4 flex justify-end gap-3">
+                              <button type="button" onClick={() => handleEdit(c)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
+                              <button type="button" onClick={() => openDeleteConfirmation(c.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
+                            </td>
+                          </tr>
+                        );
+                      });
                     })()}
 
                     {activeTab === "vessel" && (() => {
-                      const filtered = filterData(vessels, ['name', 'crewLead', 'type'], 'VSL');
+                      const filtered = filterData(vessels, ['name', 'crewLead', 'type'], 'VSL', 'vessel');
                       if (filtered.length === 0) return <tr><td colSpan={4} className="text-center py-10 text-white/40 font-mono">NO RECORDS</td></tr>;
                       const { paginated } = paginate(filtered);
-                      return paginated.map(v => (
-                        <tr key={v.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
-                          <td className="p-4 text-sm font-mono text-white/70">VSL-{v.id}</td>
-                          <td className="p-4 text-sm text-white">{v.name} <br/><span className="text-xs text-white/40">Lead: {v.crewLead || "None"}</span></td>
-                          <td className="p-4 text-sm text-white/50">{v.capacity} {v.capacityUnit || "TONNES"}</td>
-                          <td className="p-4 flex justify-end gap-3">
-                            <button type="button" onClick={() => handleEdit(v)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
-                            <button type="button" onClick={() => openDeleteConfirmation(v.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
-                          </td>
-                        </tr>
-                      ));
+                      return paginated.map(v => {
+                        const visualCode = getVisualCode("vessel", v.id);
+                        return (
+                          <tr key={v.id} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
+                            <td className="p-4 text-sm font-mono text-white/70">{visualCode}</td>
+                            <td className="p-4 text-sm text-white">{v.name} <br/><span className="text-xs text-white/40">Lead: {v.crewLead || "None"}</span></td>
+                            <td className="p-4 text-sm text-white/50">{v.capacity} {v.capacityUnit || "TONNES"}</td>
+                            <td className="p-4 flex justify-end gap-3">
+                              <button type="button" onClick={() => handleEdit(v)} className="text-white/40 hover:text-[#a2d2ff]"><Edit size={18} /></button>
+                              <button type="button" onClick={() => openDeleteConfirmation(v.id)} className="text-white/40 hover:text-red-400"><Trash2 size={18} /></button>
+                            </td>
+                          </tr>
+                        );
+                      });
                     })()}
 
                   </tbody>
@@ -589,7 +721,6 @@ function AdminControlContent() {
                       </div>
                     </div>
 
-                    {/* FLEET ASSIGNMENT */}
                     <div>
                       <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg"><Ship size={20} /> FLEET & COMMANDER ALLOCATION</h2>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -604,6 +735,7 @@ function AdminControlContent() {
                                 const selectedV = vessels.find(v => String(v.id) === vId);
                                 const matchedCrew = selectedV?.crewLead ? crews.find(c => c.name?.trim().toLowerCase() === selectedV.crewLead?.trim().toLowerCase()) : null;
                                 setFormData({ ...formData, vesselId: vId, captain: matchedCrew ? matchedCrew.name : "" });
+                                setIsDirty(true); 
                                 clearError("vesselId"); clearError("captain");
                               }}
                               className={`${getSelectClass("vesselId")} ${isFleetAssignmentDisabled ? "opacity-40 cursor-not-allowed text-white/40" : ""}`}
@@ -613,7 +745,7 @@ function AdminControlContent() {
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                           </div>
-                          <FieldError error={formErrors.vesselId} />
+                          <br/><FieldError error={formErrors.vesselId} />
                         </div>
 
                         <div>
@@ -630,12 +762,11 @@ function AdminControlContent() {
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                           </div>
-                          <FieldError error={formErrors.captain} />
+                          <br/><FieldError error={formErrors.captain} />
                         </div>
                       </div>
                     </div>
 
-                    {/* SENDER INFORMATION */}
                     <div>
                       <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
                         <MapPin size={20} /> SENDER INFORMATION
@@ -668,7 +799,6 @@ function AdminControlContent() {
                       </div>
                     </div>
 
-                    {/* RECIPIENT INFORMATION */}
                     <div>
                       <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
                         <MapPin size={20} /> RECIPIENT INFORMATION
@@ -701,7 +831,6 @@ function AdminControlContent() {
                       </div>
                     </div>
 
-                    {/* CARGO DETAILS */}
                     <div>
                       <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg">
                         <Package size={20} /> CARGO DETAILS
@@ -763,11 +892,15 @@ function AdminControlContent() {
                     <div>
                       <h2 className="flex items-center gap-4 font-grotesk font-bold text-[#E5B5FF] uppercase tracking-[3px] mb-6 text-lg"><Hash size={20} /> CREW IDENTIFICATION</h2>
                       <div className="flex gap-6 items-end">
-                        <div className="flex-1">
-                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.code ? "text-[#FF3B30]" : "text-white/40"}`}>CREW ID</label>
-                          <input type="text" readOnly value={formData.code || ""} className={getInputClass("code")} />
+                        <div className="w-full">
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono text-white/40`}>CREW ID</label>
+                          <input 
+                            type="text" 
+                            readOnly 
+                            value={editingId ? formData.visualCode : "AUTO-GENERATED"} 
+                            className={`${getInputClass("code")} cursor-not-allowed text-white/50 bg-white/[0.02] border-white/10`} 
+                          />
                         </div>
-                        {!editingId && (<button type="button" onClick={() => generateCode('CRW')} className="px-6 py-3 border border-white/10 rounded text-white/60 text-[12px] font-bold tracking-[2px] uppercase hover:text-white hover:border-white/50 flex items-center gap-2 mb-1"><RefreshCw size={16} /> GENERATE ID</button>)}
                       </div>
                     </div>
                     <div>
@@ -816,10 +949,27 @@ function AdminControlContent() {
                           <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.origin ? "text-[#FF3B30]" : "text-white/40"}`}>ORIGIN CITY / COUNTRY</label>
                           <input type="text" value={formData.origin || ""} onChange={e => updateField("origin", e.target.value)} className={getInputClass("origin")} />
                         </div>
+                        
                         <div className="col-span-2">
                           <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.contact ? "text-[#FF3B30]" : "text-white/40"}`}>CONTACT NUMBER</label>
-                          <input type="text" value={formData.contact || ""} onChange={e => updateField("contact", e.target.value)} className={getInputClass("contact")} />
+                          <input 
+                            type="text" 
+                            value={formData.contact || ""} 
+                            onChange={e => {
+                              let val = e.target.value;
+                              val = val.replace(/[^\d+]/g, "");
+                              val = val.replace(/(?!^)\+/g, "");
+                              
+                              const digitCount = val.replace(/\D/g, "").length;
+                              if (digitCount <= 12) {
+                                updateField("contact", val);
+                              }
+                            }} 
+                            className={getInputClass("contact")} 
+                          />
+                          <br/><FieldError error={formErrors.contact} />
                         </div>
+
                       </div>
                     </div>
                   </div>
@@ -863,7 +1013,7 @@ function AdminControlContent() {
                             </select>
                             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
                           </div>
-                          <FieldError error={formErrors.crewLead} />
+                          <br/><FieldError error={formErrors.crewLead} />
                         </div>
 
                         <div>
@@ -888,7 +1038,7 @@ function AdminControlContent() {
                 )}
 
                 <div className={`${generalError ? 'mt-6' : 'mt-14'} flex gap-4`}>
-                  <button type="button" onClick={() => setViewMode("table")} className="px-6 py-4 rounded-md font-bold text-white/50 border border-white/10 hover:bg-white/5 uppercase tracking-widest w-1/3 transition-colors">CANCEL</button>
+                  <button type="button" onClick={handleBackToTable} className="px-6 py-4 rounded-md font-bold text-white/50 border border-white/10 hover:bg-white/5 uppercase tracking-widest w-1/3 transition-colors">CANCEL</button>
                   <button type="submit" disabled={isLoading} className="flex-1 py-4 rounded-md font-grotesk font-bold text-[16px] text-white tracking-[3px] uppercase bg-gradient-to-r from-[#B026FF] to-[#a2d2ff] hover:opacity-90 transition-opacity shadow-[0_0_20px_rgba(176,38,255,0.2)] disabled:opacity-50">
                     {isLoading ? "PROCESSING..." : "SAVE CHANGES"}
                   </button>

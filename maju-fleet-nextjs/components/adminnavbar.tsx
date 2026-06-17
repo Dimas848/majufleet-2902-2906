@@ -84,7 +84,7 @@ export default function AdminNavbar() {
       <nav className="sticky top-0 z-50 h-[80px] flex items-center justify-between px-6 md:px-10 bg-[#0a0a0c]">
         <div className="flex items-center gap-4 w-1/3">
           <Image src="/logo.png" alt="Logo" width={65} height={65} className="-mr-1 opacity-90" />
-          <span className="font-grotesk font-bold text-[30px] tracking-[3px] uppercase text-[#E5B5FF] drop-shadow-[0_0_10px_rgba(176,38,255,0.4)]">
+          <span className="text-[#E5B5FF] font-grotesk font-bold text-[30px] tracking-[3px] uppercase drop-shadow-[0_0_10px_rgba(176,38,255,0.4)]">
             Maju Fleet
           </span>
         </div>
@@ -146,7 +146,6 @@ export default function AdminNavbar() {
             {currentTime}
           </div>
 
-          {/* ✅ LINK PROFIL ADMIN YANG SUDAH TERINTEGRASI */}
           <Link href="/Dashboard-Admin/profile">
             <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#B026FF] to-[#00E3FD] p-[2px] cursor-pointer hover:scale-105 transition-transform">
               <div className="w-full h-full rounded-full bg-[#0a0a0c] flex items-center justify-center overflow-hidden">
@@ -167,7 +166,9 @@ export default function AdminNavbar() {
         {showLogoutModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowLogoutModal(false)} className="absolute inset-0 bg-black/80 backdrop-blur-sm cursor-pointer" />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-[#0a0a0c] border border-[#B026FF]/30 rounded-xl p-8 max-sm w-full shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10 text-center">
+            
+            {/* ✅ FIX TOTAL: Mengubah max-sm menjadi max-w-[420px] agar modal terkunci secara proporsional */}
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="relative bg-[#0a0a0c] border border-[#B026FF]/30 rounded-xl p-8 max-w-[420px] w-full shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10 text-center">
               <h2 className="text-white font-grotesk font-bold text-xl tracking-[2px] uppercase mb-3">System Logout</h2>
               <p className="text-white/60 font-mono text-[11px] tracking-widest mb-8 leading-relaxed">Are you sure you want to terminate the current session and return to the main portal?</p>
               <div className="flex gap-4">
