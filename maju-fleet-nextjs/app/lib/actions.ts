@@ -19,7 +19,7 @@ async function recordAccessLog(email: string, status: string, user?: any) {
     const ipAddress = headersList.get("x-forwarded-for") || "127.0.0.1";
     // Ambil info device dari user-agent, potong max 50 karakter agar rapi
     const rawDevice = headersList.get("user-agent") || "Unknown Device";
-    const device = rawDevice.split(" ")[0].substring(0, 50); 
+    const device = rawDevice.split(" ")[0].substring(0, 50);
 
     await prisma.accessLog.create({
       data: {
@@ -75,20 +75,20 @@ export async function loginUserUnified(email: string, password?: string) {
     const user = await prisma.user.findUnique({ where: { email: email } });
 
     if (!user) {
-      await recordAccessLog(email, "FAILED"); 
+      await recordAccessLog(email, "FAILED");
       return { success: false, message: "Email tidak ditemukan di sistem." };
     }
 
     if (user.password !== password) {
-      await recordAccessLog(email, "FAILED_PASSWORD", user); 
+      await recordAccessLog(email, "FAILED_PASSWORD", user);
       return { success: false, message: "Password yang Anda masukkan salah!" };
     }
 
     const cookieStore = await cookies();
-    
+
     // Deteksi Role User untuk menentukan jenis Cookie yang diset
     const isAdmin = user.role === "administrator" || user.role === "captain";
-    
+
     if (isAdmin) {
       // Set Session untuk Admin (Max Age 2 Jam)
       cookieStore.set("admin_session_id", String(user.id), { httpOnly: true, maxAge: 60 * 60 * 2 });
@@ -102,12 +102,12 @@ export async function loginUserUnified(email: string, password?: string) {
       return { success: false, message: "Akses ditolak: Peran akun tidak dikenali." };
     }
 
-    await recordAccessLog(email, "SUCCESS", user); 
+    await recordAccessLog(email, "SUCCESS", user);
 
-    return { 
-      success: true, 
+    return {
+      success: true,
       message: "ACCESS AUTHORIZED.",
-      role: isAdmin ? "admin" : "customer" 
+      role: isAdmin ? "admin" : "customer"
     };
   } catch (error) {
     console.error("Error Unified Login:", error);
@@ -148,6 +148,7 @@ export async function getAllData() {
       include: {
         vessel: true,
         user: true,
+        captain: true, // ✅ ikut ambil data kapten (relasi User)
         items: { include: { packageType: true } }
       },
       orderBy: { id: "desc" }
@@ -179,9 +180,11 @@ export async function saveEntity(entityType: string, data: any, editingId: numbe
     const isUpdating = editingId !== null;
 
     if (entityType === "fleet") {
+      // ✅ captainId dikirim dari form (ID user yang berperan sebagai captain), bukan teks bebas
+      const selectedCaptainId = data.captainId ? parseInt(data.captainId) : null;
+
       const shipmentData = {
         status: data.status || "PENDING",
-        captain: data.captain || "UNASSIGNED",
         senderName: data.senderName || null,
         senderContact: data.senderContact || null,
         senderEmail: data.senderEmail || null,
@@ -204,7 +207,11 @@ export async function saveEntity(entityType: string, data: any, editingId: numbe
       if (isUpdating) {
         await prisma.shipment.update({
           where: { id: editingId },
-          data: shipmentData,
+          data: {
+            ...shipmentData,
+            // captainId boleh null (artinya "Awaiting Assignment" / belum ada kapten)
+            captainId: selectedCaptainId,
+          },
         });
       } else {
         const selectedUserId = data.userId ? parseInt(data.userId) : 1;
@@ -217,6 +224,8 @@ export async function saveEntity(entityType: string, data: any, editingId: numbe
             user: { connect: { id: selectedUserId } },
             vessel: { connect: { id: selectedVesselId } },
             ...shipmentData,
+            // Hanya connect captain kalau ID-nya memang dipilih
+            ...(selectedCaptainId ? { captain: { connect: { id: selectedCaptainId } } } : {}),
             items: {
               create: [
                 {
@@ -289,7 +298,7 @@ export async function deleteEntity(entityType: string, id: number) {
     } else if (entityType === "vessel") {
       await prisma.vessel.delete({ where: { id } });
     }
-    
+
     revalidatePath("/Dashboard-Admin/register");
     revalidatePath("/Dashboard-Admin/fleet");
     revalidatePath("/Dashboard-Admin/analytics");
@@ -309,12 +318,13 @@ export async function getMapVessels() {
     const shipments = await prisma.shipment.findMany({
       include: {
         vessel: true,
+        captain: true, // ✅ ikut ambil relasi captain (User)
         items: { include: { packageType: true } },
         details: { orderBy: { update_time: 'desc' }, take: 1 }
       }
     });
 
-  return shipments.map((s: any) => {
+    return shipments.map((s: any) => {
       const latestDetail = s.details?.[0];
       const lat = latestDetail?.current_lat ?? 0;
       const lng = latestDetail?.current_lng ?? 0;
@@ -340,7 +350,8 @@ export async function getMapVessels() {
         status: s.status,
         dotColor: dotColor,
         package: s.items?.[0]?.packageType?.name || "Standard Cargo Load",
-        crew: s.vessel?.crewLead || s.captain || "Commander Unassigned",
+        // ✅ s.captain sekarang object relasi User, ambil .name nya. Fallback ke "Awaiting Assignment" jika belum ada kapten
+        crew: s.vessel?.crewLead || s.captain?.name || "Awaiting Assignment",
         origin: s.senderCity || "Origin Hub",
         dest: s.recipientCity || "Destination Port",
         reason: reason
@@ -392,13 +403,13 @@ export async function bookShipmentCustomer(formData: {
     const pricingMapping: Record<string, number> = {
       economy: 59000,
       standard: 70000,
-      heavy: 120000, 
+      heavy: 120000,
       express: 90000,
-      vip: 150000    
+      vip: 150000
     };
-    
+
     const basePricePerKg = pricingMapping[formData.packageTypeString] || 70000;
-    
+
     // 💡 Kalkulasi Total Tagihan (Berat KG x Harga Brosur Paket)
     const freightCharge = basePricePerKg * cleanWeight;
     const insurance = Math.round(freightCharge * 0.05);
@@ -408,8 +419,8 @@ export async function bookShipmentCustomer(formData: {
     const originInput = formData.senderCity ? formData.senderCity.toLowerCase() : "";
     const destInput = formData.recipientCity ? formData.recipientCity.toLowerCase() : "";
 
-    let originId = 1; 
-    let destId = 3;   
+    let originId = 1;
+    let destId = 3;
 
     if (originInput.includes("jakarta") || originInput.includes("priok")) originId = 1;
     if (originInput.includes("rotterdam")) originId = 2;
@@ -420,21 +431,23 @@ export async function bookShipmentCustomer(formData: {
     const invoiceNumber = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
     // 🔥 CREATE BERSARANG (NESTED CREATE): Membuat Shipment, Items, dan Invoice sekaligus!
+    // ✅ Field "captain" DIHAPUS dari create karena sekarang relasi ke User (captainId).
+    // Biarkan captainId tetap null (artinya "Awaiting Assignment") sampai admin menugaskan kapten.
     await prisma.shipment.create({
       data: {
         receipt_number: receiptNumber,
         status: "PENDING",
         userId: cleanUserId,
-        vesselId: 1, 
-        originId: originId, 
-        destId: destId,     
+        vesselId: 1,
+        originId: originId,
+        destId: destId,
         cargoDesc: formData.cargoDesc,
         category: formData.category,
         weight: cleanWeight,
         weightUnit: "KG",
         dimensions: cleanDimensions,
         book_date: new Date(),
-        
+
         senderName: activeUser.name,
         senderEmail: activeUser.email,
         senderContact: activeUser.phone || "08123456789",
@@ -448,7 +461,7 @@ export async function bookShipmentCustomer(formData: {
         recipientAddress: "Port Warehouse Zone Alpha",
         recipientCity: formData.recipientCity,
         recipientCountry: "Destination Country",
-        captain: "Awaiting Assignment",
+        // captain: dihapus — captainId otomatis null sampai di-assign
 
         items: {
           create: [
@@ -484,8 +497,8 @@ export async function confirmInvoicePayment(invoiceId: number, shipmentId: numbe
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Ubah status Invoice jadi Paid
       await tx.shipment.update({
-      where: { id: Number(shipmentId) },
-      data: { status: "PENDING" } // 🔒 Ubah ke PENDING agar admin yang mengubahnya nanti ke NOT DEPARTED YET setelah kapal diisi
+        where: { id: Number(shipmentId) },
+        data: { status: "PENDING" } // 🔒 Ubah ke PENDING agar admin yang mengubahnya nanti ke NOT DEPARTED YET setelah kapal diisi
       });
 
       // 2. Ubah status Kargo jadi Siap Berangkat
@@ -508,7 +521,7 @@ export async function getCustomerBilling(userId: number) {
   try {
     // Pastikan userId dikonversi ke Number
     const uId = Number(userId);
-    
+
     const dbInvoices = await prisma.invoice.findMany({
       where: { shipment: { userId: uId } },
       include: {
@@ -549,7 +562,7 @@ export async function getCustomerBilling(userId: number) {
         shipmentId: inv.shipmentId,
         ref: s?.receipt_number || "UNKNOWN",
         date: new Date(inv.createdAt).toLocaleDateString('id-ID'),
-        amount: amount, 
+        amount: amount,
         status: s?.status === "CANCELED" ? "Canceled" : inv.status,
         items: [
           { desc: `Freight Charges (${s?.cargoDesc || "Cargo load"}) - ${cleanWeight} KG`, price: amount }
@@ -570,6 +583,7 @@ export async function trackShipmentCustomer(receiptNumber: string) {
       where: { receipt_number: receiptNumber },
       include: {
         vessel: true,
+        captain: true, // ✅ ikut ambil relasi captain agar bisa ditampilkan di tracking
         items: { include: { packageType: true } },
         details: { orderBy: { update_time: "desc" }, take: 1 }
       }
@@ -595,7 +609,7 @@ export async function getCustomerShipments(userId: number) {
     });
 
     const shipments = dbShipments.map((s: any) => {
-      const formattedDate = s.book_date 
+      const formattedDate = s.book_date
         ? new Date(s.book_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
         : "-";
 
@@ -639,7 +653,7 @@ export async function cancelShipmentCustomer(invoiceId: number, shipmentId: numb
 
     revalidatePath("/dashboard/billing");
     revalidatePath("/dashboard/myshipments");
-    
+
     return { success: true, message: "Transaksi berhasil dibatalkan dan dihapus bersih dari sistem." };
   } catch (error) {
     console.error("Gagal membatalkan transaksi customer:", error);
