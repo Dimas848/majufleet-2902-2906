@@ -117,7 +117,7 @@ function MapContent() {
             return {
               id: s.receipt_number || `MJF-${s.id}`,
               package: packageName,
-              crew: s.vessel?.crewLead || s.captain || "NO CREW",
+              crew: s.vessel?.crewLead || s.captain?.name || "NO CREW",
               status: s.status || "PENDING",
               statusColor,
               dotColor,

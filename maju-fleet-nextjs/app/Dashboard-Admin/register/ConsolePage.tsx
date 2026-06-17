@@ -145,7 +145,7 @@ function AdminControlContent() {
     
     let initialData: any = {};
     if (activeTab === "fleet") {
-      initialData = { weightUnit: "KG", status: "PENDING", packageTypeId: "2", vesselId: "", captain: "" };
+      initialData = { weightUnit: "KG", status: "PENDING", packageTypeId: "2", vesselId: "", captainId: "" };
     } else if (activeTab === "vessel") {
       initialData = { visualCode: `VSL-${vessels.length + 1}`, capacityUnit: "TONNES" };
     } else if (activeTab === "crew") {
@@ -178,7 +178,7 @@ function AdminControlContent() {
       packageTypeId: currentPackageId, 
       status: currentStatus, 
       vesselId: isPending ? "" : (item.vesselId ? String(item.vesselId) : ""),
-      captain: isPending ? "" : (item.captain || "")
+      captainId: isPending ? "" : (item.captainId ? String(item.captainId) : "")
     });
     setFormErrors({});
     setGeneralError(null);
@@ -734,9 +734,9 @@ function AdminControlContent() {
                                 const vId = e.target.value;
                                 const selectedV = vessels.find(v => String(v.id) === vId);
                                 const matchedCrew = selectedV?.crewLead ? crews.find(c => c.name?.trim().toLowerCase() === selectedV.crewLead?.trim().toLowerCase()) : null;
-                                setFormData({ ...formData, vesselId: vId, captain: matchedCrew ? matchedCrew.name : "" });
+                                setFormData({ ...formData, vesselId: vId, captainId: matchedCrew ? String(matchedCrew.id) : "" });
                                 setIsDirty(true); 
-                                clearError("vesselId"); clearError("captain");
+                                clearError("vesselId"); clearError("captainId");
                               }}
                               className={`${getSelectClass("vesselId")} ${isFleetAssignmentDisabled ? "opacity-40 cursor-not-allowed text-white/40" : ""}`}
                             >
@@ -749,20 +749,20 @@ function AdminControlContent() {
                         </div>
 
                         <div>
-                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.captain ? "text-[#FF3B30]" : "text-white/40"}`}>ASSIGNED CAPTAIN / CREW LEAD</label>
-                          <div className="relative">
-                            <select
-                              disabled={isFleetAssignmentDisabled}
-                              value={formData.captain || ""}
-                              onChange={e => updateField("captain", e.target.value)}
-                              className={`${getSelectClass("captain")} ${isFleetAssignmentDisabled ? "opacity-40 cursor-not-allowed text-white/40" : ""}`}
-                            >
-                              <option value="" disabled hidden>Select captain on board...</option>
-                              {crews.map(c => (<option key={c.id} value={c.name}>{c.name} ({c.role ? c.role.replace(/_/g, ' ').toUpperCase() : "CREW"})</option>))}
-                            </select>
-                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
-                          </div>
-                          <br/><FieldError error={formErrors.captain} />
+                          <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.captainId ? "text-[#FF3B30]" : "text-white/40"}`}>ASSIGNED CAPTAIN / CREW LEAD</label>
+                            <div className="relative">
+                              <select
+                                disabled={isFleetAssignmentDisabled}
+                                value={formData.captainId || ""}
+                                onChange={e => updateField("captainId", e.target.value)}
+                                className={`${getSelectClass("captainId")} ${isFleetAssignmentDisabled ? "opacity-40 cursor-not-allowed text-white/40" : ""}`}
+                              >
+                                <option value="" disabled hidden>Select captain on board...</option>
+                                {crews.map(c => (<option key={c.id} value={c.id}>{c.name} ({c.role ? c.role.replace(/_/g, ' ').toUpperCase() : "CREW"})</option>))}
+                              </select>
+                              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
+                            </div>
+                            <br/><FieldError error={formErrors.captainId} />
                         </div>
                       </div>
                     </div>

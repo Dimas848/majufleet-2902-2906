@@ -156,7 +156,7 @@ function FleetDashboardContent() {
             id: s.id,
             vessel: s.vessel?.name || "UNASSIGNED VESSEL", 
             receipt: s.receipt_number || `MJF-${s.id}`,
-            crew: s.captain && s.captain !== "UNASSIGNED" ? s.captain : (s.vessel?.crewLead || "NO CREW"),
+            crew: s.captain?.name || s.vessel?.crewLead || "NO CREW",
             package: pkgName, 
             routeOrigin: s.senderCity || "Unknown Origin",
             routeDest: s.recipientCity || "Unknown Dest",
