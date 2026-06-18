@@ -1,4 +1,3 @@
-// UserNavbar.tsx
 "use client";
 
 import React, { useState } from "react";
@@ -28,6 +27,7 @@ export default function UserNavbar() {
     <>
       <nav className="sticky top-0 z-50 h-[80px] flex items-center justify-between px-6 md:px-10 bg-[#0a0a0c]">
         
+        {/* LOGO AREA */}
         <div className="flex items-center gap-4 w-1/4 shrink-0">
           <Image src="/logo.png" alt="Logo" width={65} height={65} className="-mr-1 opacity-90" />
           <span className="hidden sm:block font-grotesk font-bold text-[30px] tracking-[3px] uppercase text-[#E5B5FF] drop-shadow-[0_0_10px_rgba(176,38,255,0.4)]">
@@ -35,6 +35,7 @@ export default function UserNavbar() {
           </span>
         </div>
 
+        {/* MIDDLE NAVIGATION LINKS */}
         <div className="hidden md:flex flex-1 items-center justify-center gap-10 overflow-x-auto no-scrollbar whitespace-nowrap mt-2">
           {navLinks.map((link) => {
             const isActive = pathname.startsWith(link.href);
@@ -54,12 +55,24 @@ export default function UserNavbar() {
           })}
         </div>
 
+        {/* RIGHT ACTION BUTTONS */}
         <div className="flex items-center justify-end gap-6 w-1/4 shrink-0">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#B026FF] to-[#00E3FD] p-[2px] cursor-pointer hover:scale-105 transition-transform">
+          {/* 💡 SINKRONISASI LINK PROFIL: Sekarang dibungkus Link untuk mengarah ke halaman manifest profil */}
+          <Link 
+            href="/dashboard/profile" 
+            className={`w-10 h-10 rounded-full bg-gradient-to-tr from-[#B026FF] to-[#00E3FD] p-[2px] cursor-pointer hover:scale-105 transition-all block ${
+              pathname === "/dashboard/profile" ? "shadow-[0_0_15px_rgba(176,38,255,0.5)] scale-105" : ""
+            }`}
+          >
             <div className="w-full h-full rounded-full bg-[#0a0a0c] flex items-center justify-center overflow-hidden">
-              <User size={18} className="text-white/60"/>
+              <User 
+                size={18} 
+                className={`transition-colors ${pathname === "/dashboard/profile" ? "text-[#E5B5FF]" : "text-white/60"}`}
+              />
             </div>
-          </div>
+          </Link>
+
+          {/* LOGOUT BUTTON */}
           <button 
             onClick={() => setShowLogoutModal(true)} 
             className="w-10 h-10 rounded-full border border-white/10 bg-[#121317] flex items-center justify-center text-white/50 hover:text-[#FF3B30] hover:border-[#FF3B30]/50 hover:bg-[#FF3B30]/10 transition-all"
@@ -71,6 +84,7 @@ export default function UserNavbar() {
 
       <div className="w-full h-px bg-white/5 shrink-0 mb-6 mt-[10px]"></div>
 
+      {/* LOGOUT CONFIRMATION MODAL */}
       <AnimatePresence>
         {showLogoutModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center px-4">

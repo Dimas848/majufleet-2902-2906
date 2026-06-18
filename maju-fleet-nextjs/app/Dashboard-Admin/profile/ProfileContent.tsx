@@ -333,8 +333,7 @@ export default function ProfileContent() {
           <div className="md:col-span-2 bg-[#121317] border border-white/5 p-8 rounded-2xl">
             <h2 className="font-grotesk font-bold text-xl tracking-[2px] uppercase text-[#E5B5FF] mb-8 border-b border-white/5 pb-4">Profile Parameters</h2>
 
-            <form onSubmit={handleSaveProfile} className="flex flex-col gap-6" noValidate>
-              
+            <form onSubmit={handleSaveProfile} className="flex flex-col gap-6" noValidate>              
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
                   <label className="text-[10px] font-bold text-white/40 tracking-[3px] uppercase mb-2 block font-mono">Full Name <span className="text-[#B026FF]">*</span></label>
@@ -343,13 +342,18 @@ export default function ProfileContent() {
                   </div>
                   {formErrors.name && <p className="text-[#FF3B30] text-[10px] font-mono mt-1.5 flex items-center gap-1"><AlertCircle size={12}/> {formErrors.name}</p>}
                 </div>
-
                 <div>
+
                   <label className="text-[10px] font-bold text-white/40 tracking-[3px] uppercase mb-2 block font-mono">Contact Node (Phone) <span className="text-[#B026FF]">*</span></label>
+
                   <div className="relative">
+
                     <input type="text" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="ENTER PHONE NUMBER" className={`w-full bg-[#0a0a0c] border rounded px-4 py-3 text-sm font-medium text-white focus:outline-none transition-colors font-mono tracking-wide ${formErrors.phone ? "border-[#FF3B30] focus:border-[#FF3B30]" : "border-white/10 focus:border-[#B026FF]"}`} />
+
                   </div>
+
                   {formErrors.phone && <p className="text-[#FF3B30] text-[10px] font-mono mt-1.5 flex items-center gap-1"><AlertCircle size={12}/> {formErrors.phone}</p>}
+
                 </div>
 
                 <div className="sm:col-span-2">

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Package, MapPin, Ship, Navigation, Clock, CheckCircle2, FileText, Activity, Anchor, Search, XCircle, RefreshCw, X, ShieldCheck, Box, AlertCircle } from "lucide-react";
+import { Package, MapPin, Ship, Navigation, Clock, CheckCircle2, FileText, Activity, Anchor, Search, XCircle, RefreshCw, X, ShieldCheck, Box, AlertCircle, Weight } from "lucide-react";
 import UserNavbar from "@/components/usernavbar";
 // Import Server Actions resmi dari backend actions.ts
 import { trackShipmentCustomer, getCurrentSession, getCustomerShipments } from "@/app/lib/actions";
@@ -49,7 +49,12 @@ export default function MyShipmentsPage() {
   const [showTrackResult, setShowTrackResult] = useState(false);
   const [trackError, setTrackError] = useState(false);
   const [showToast, setShowToast] = useState(false);
+  const [toastText, setToastText] = useState("TRACKING ID NOT FOUND"); 
   const [currentTrackingData, setCurrentTrackingData] = useState<any>(null);
+
+  // STATE: Pengendali pop-up lembar struk resi kargo
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [selectedShipment, setSelectedShipment] = useState<any>(null);
 
   // Load daftar kargo asli milik user secara real-time saat halaman dibuka
   useEffect(() => {
@@ -59,7 +64,11 @@ export default function MyShipmentsPage() {
         if (session) {
           const res = await getCustomerShipments(session.id);
           if (res.success) {
-            setShipments(res.shipments);
+            // 💡 REVISI FILTER: Hanya meloloskan kargo aktif yang sukses dipesan (Menyembunyikan status CANCELED)
+            const activeShipments = res.shipments.filter(
+              (s: any) => s.status !== "CANCELED" && s.status !== "CANCELLED"
+            );
+            setShipments(activeShipments);
           }
         }
       } catch (error) {
@@ -84,6 +93,34 @@ export default function MyShipmentsPage() {
       
       if (res.success && res.data) {
         const s = res.data;
+
+        // Blokir pelacakan satelit jika kode resi yang dicari sudah berstatus batal
+        if (s.status === "CANCELED" || s.status === "CANCELLED") {
+          setTrackError(true);
+          setToastText("TERMINATED: THIS SHIPMENT HAS BEEN CANCELED");
+          setShowToast(true);
+          setTimeout(() => setShowToast(false), 4000);
+          return;
+        }
+        
+        const originCity = s.senderCity || "";
+        const originCountry = s.senderCountry || "";
+        const destinationCity = s.recipientCity || "";
+        const destinationCountry = s.recipientCountry || "";
+
+        if (
+          originCity.trim().length < 4 || 
+          originCountry.trim().length < 4 || 
+          destinationCity.trim().length < 4 || 
+          destinationCountry.trim().length < 4
+        ) {
+          setTrackError(true);
+          setToastText("INVALID LOCATION: MINIMUM 4 CHARACTERS REQUIRED");
+          setShowToast(true);
+          setTimeout(() => setShowToast(false), 4000);
+          return;
+        }
+
         const latestDetail = s.details?.[0];
         
         let progressPercent = 15; 
@@ -94,19 +131,25 @@ export default function MyShipmentsPage() {
         setCurrentTrackingData({
           status: s.status,
           progress: progressPercent,
-          origin: s.senderCity || "Origin Hub",
-          destination: s.recipientCity || "Destination Hub",
+          senderName: s.senderName || "Sender Reference",
+          senderCountry: originCountry,
+          recipientName: s.recipientName || "Recipient Reference",
+          recipientCountry: destinationCountry,
+          origin: originCity,
+          destination: destinationCity,
           atd: s.book_date ? new Date(s.book_date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : "-",
           eta: latestDetail ? `LAT: ${latestDetail.current_lat} | LNG: ${latestDetail.current_lng}` : "Awaiting Satellite Link...",
           vessel: s.vessel?.name || "UNASSIGNED LOGISTICS VESSEL",
           package: s.items?.[0]?.packageType?.name || "STANDARD CONTAINER",
           cargoDesc: s.cargoDesc || "General Cargo Load",
-          cargoType: s.category || "Dry Goods"
+          cargoType: s.category || "Dry Goods",
+          weight: s.weight || 0
         });
         
         setShowTrackResult(true);
       } else {
         setTrackError(true);
+        setToastText("TRACKING ID NOT FOUND");
         setShowToast(true);
         setTimeout(() => setShowToast(false), 3000);
       }
@@ -123,11 +166,10 @@ export default function MyShipmentsPage() {
     performTracking(trackingNumber);
   };
 
-  // Fungsi auto-track ketika baris tabel di bawah diklik oleh user
   const handleRowClick = (receiptNum: string) => {
     setTrackingNumber(receiptNum);
     performTracking(receiptNum);
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll otomatis ke atas untuk melihat radar peta
+    window.scrollTo({ top: 0, behavior: 'smooth' }); 
   };
 
   const resetTracking = () => {
@@ -136,6 +178,35 @@ export default function MyShipmentsPage() {
     setTrackError(false);
     setShowToast(false);
     setCurrentTrackingData(null);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return "Rp " + amount.toLocaleString("id-ID");
+  };
+
+  const getReceiptGrandTotal = (s: any) => {
+    if (s?.invoice?.amount) return Number(s.invoice.amount);
+    const pricing: Record<string, number> = { economy: 59000, standard: 70000, heavy: 120000, express: 90000, vip: 150000 };
+    const rawType = (s?.packageTypeString || "").toLowerCase();
+    const cleanType = rawType.replace("maju", "").trim();
+    const basePrice = pricing[cleanType] || pricing[rawType] || 70000;
+    return basePrice * (s?.weight || 0);
+  };
+
+  const formatReceiptDate = (s: any) => {
+    if (!s) return "-";
+    const rawDate = s.book_date || s.bookDate || s.createdAt;
+    if (!rawDate) return "-";
+    return new Date(rawDate).toLocaleDateString('id-ID', {
+      day: '2-digit', month: 'short', year: 'numeric'
+    });
+  };
+
+  // 💡 CLEANER FORMATTER: Menghapus bug duplikasi kata "Maju Maju" di frontend
+  const cleanPackageName = (nameString: string) => {
+    if (!nameString) return "Maju Standard";
+    const clean = nameString.replace(/maju/gi, "").trim();
+    return `Maju ${clean.charAt(0).toUpperCase() + clean.slice(1)}`;
   };
 
   const isDelivered = currentTrackingData?.status === "DELIVERED";
@@ -154,7 +225,7 @@ export default function MyShipmentsPage() {
               <X size={14} strokeWidth={3} />
             </div>
             <span className="text-[#e87c86] font-grotesk font-bold text-[14px] uppercase tracking-[1px]">
-              TRACKING ID NOT FOUND
+              {toastText}
             </span>
           </motion.div>
         )}
@@ -310,15 +381,19 @@ export default function MyShipmentsPage() {
                               </div>
                               <div className="bg-[#1a1b20] p-3 rounded border border-white/5">
                                 <p className="text-white/40 font-grotesk text-[9px] uppercase tracking-wider mb-1 flex items-center gap-1"><Box size={10}/> Package Tier</p>
-                                <p className="text-white font-mono text-[12px]">{currentTrackingData.package}</p>
+                                <p className="text-white font-mono text-[12px]">{cleanPackageName(currentTrackingData.package)}</p>
                               </div>
                               <div className="bg-[#1a1b20] p-3 rounded border border-white/5">
-                                <p className="text-white/40 font-grotesk text-[9px] uppercase tracking-wider mb-1 flex items-center gap-1"><Package size={10}/> Cargo Manifest</p>
-                                <p className="text-white font-mono text-[12px]">{currentTrackingData.cargoDesc}</p>
+                                <p className="text-white/40 font-grotesk text-[9px] uppercase tracking-wider mb-1 flex items-center gap-1"><Package size={10}/> Cargo Description</p>
+                                <p className="text-white font-mono text-[12px] truncate">{currentTrackingData.cargoDesc}</p>
                               </div>
                               <div className="bg-[#1a1b20] p-3 rounded border border-white/5">
                                 <p className="text-white/40 font-grotesk text-[9px] uppercase tracking-wider mb-1 flex items-center gap-1"><ShieldCheck size={10}/> Category</p>
                                 <p className="text-white font-mono text-[12px]">{currentTrackingData.cargoType}</p>
+                              </div>
+                              <div className="bg-[#1a1b20] p-3 rounded border border-white/5 col-span-2">
+                                <p className="text-white/40 font-grotesk text-[9px] uppercase tracking-wider mb-1 flex items-center gap-1"><Weight size={10}/> Cargo Total Weight</p>
+                                <p className="text-[#B026FF] font-mono text-[13px] font-bold">{currentTrackingData.weight.toLocaleString('id-ID')} KG</p>
                               </div>
                             </div>
                           </div>
@@ -329,7 +404,6 @@ export default function MyShipmentsPage() {
                 )}
               </AnimatePresence>
 
-              {/* 💡 SINKRONISASI MUTLAK: Tabel Manifest Riwayat Kargo Dinamis Asli Database */}
               <h3 className="text-white font-grotesk text-[16px] uppercase tracking-[2px] mt-12 mb-4">Your Shipment Fleet Registry</h3>
               <div className="bg-[#121317]/80 backdrop-blur-sm border border-white/5 rounded-xl overflow-hidden shadow-2xl">
                 <div className="overflow-x-auto">
@@ -337,16 +411,17 @@ export default function MyShipmentsPage() {
                     <thead>
                       <tr className="bg-[#1a1b20] text-white/50 font-grotesk text-[10px] uppercase tracking-[2px] border-b border-white/5">
                         <th className="p-4 font-normal">Tracking ID</th>
-                        <th className="p-4 font-normal">Cargo Manifest</th>
+                        <th className="p-4 font-normal">Package Type</th> 
                         <th className="p-4 font-normal">Route Hub</th>
                         <th className="p-4 font-normal">Weight</th>
                         <th className="p-4 font-normal">Status</th>
+                        <th className="p-4 font-normal text-center">Action</th> 
                       </tr>
                     </thead>
                     <tbody className="text-white font-inter text-[13px]">
                       {shipments.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="p-8 text-center text-white/30 font-inter">No deployment records linked to this account.</td>
+                          <td colSpan={6} className="p-8 text-center text-white/30 font-inter">No deployment records linked to this account.</td>
                         </tr>
                       ) : (
                         shipments.map((s) => (
@@ -356,9 +431,11 @@ export default function MyShipmentsPage() {
                             className="border-b border-white/5 hover:bg-[#B026FF]/5 transition-colors cursor-pointer"
                           >
                             <td className="p-4 font-mono text-[#E5B5FF] font-bold">{s.receipt_number}</td>
-                            <td className="p-4 text-white/80">{s.cargoDesc}</td>
+                            <td className="p-4 text-white/80 font-mono text-[11px] uppercase tracking-wider">
+                              {cleanPackageName(s.packageTypeString || s.package_type_string || s.items?.[0]?.packageType?.name)}
+                            </td>
                             <td className="p-4 text-white/60 font-mono text-[12px]">{s.senderCity} ➔ {s.recipientCity}</td>
-                            <td className="p-4 text-white/70">{s.weight.toLocaleString('id-ID')} KG</td>
+                            <td className="p-4 text-white/70">{(s.weight || 0).toLocaleString('id-ID')} KG</td>
                             <td className="p-4">
                               <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${
                                 s.status === "DELIVERED" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" :
@@ -367,6 +444,14 @@ export default function MyShipmentsPage() {
                               }`}>
                                 {s.status}
                               </span>
+                            </td>
+                            <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
+                              <button 
+                                onClick={() => { setSelectedShipment(s); setShowReceiptModal(true); }}
+                                className="inline-flex items-center gap-1.5 bg-[#B026FF]/10 text-[#E5B5FF] hover:bg-[#B026FF] hover:text-white px-3 py-1.5 rounded text-[11px] font-mono uppercase tracking-wider transition-all border border-[#B026FF]/20"
+                              >
+                                <FileText size={13} /> Receipt
+                              </button>
                             </td>
                           </tr>
                         ))
@@ -380,6 +465,130 @@ export default function MyShipmentsPage() {
           </div>
         </main>
       )}
+
+      {/* === INTEGRASI MODAL POP-UP: SHIPMENT RECEIPT STRUK LOGISTIK PREMIUM === */}
+      <AnimatePresence>
+        {showReceiptModal && selectedShipment && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 overflow-y-auto bg-black/80 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowReceiptModal(false)} className="fixed inset-0 cursor-pointer" />
+            
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-[480px] bg-[#0d0d11] border border-white/10 rounded-2xl p-6 md:p-8 shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10 my-auto flex flex-col justify-between">
+              <button onClick={() => setShowReceiptModal(false)} className="absolute top-4 right-4 text-white/40 hover:text-white transition-colors"><XCircle size={22} /></button>
+              <div className="absolute top-0 left-0 w-full h-[4px] bg-[#B026FF]" />
+              
+              <div>
+                <div className="text-center pb-4 mb-4 border-b border-dashed border-white/10">
+                  <div className="inline-flex items-center justify-center bg-[#B026FF]/10 text-[#E5B5FF] p-2.5 rounded-full mb-2 border border-[#B026FF]/20">
+                    <Ship size={20} />
+                  </div>
+                  <h3 className="font-grotesk font-bold text-[18px] text-white tracking-[2px] uppercase">SHIPMENT RECEIPT</h3>
+                  <p className="text-white/40 font-mono text-[9px] uppercase tracking-[3px] mt-0.5">MAJU FLEET</p>
+                </div>
+
+                {/* Meta Data Utama Nota Struk */}
+                <div className="font-mono text-[11px] bg-[#121317] border border-white/5 rounded-lg p-4 space-y-2.5 mb-5 text-white/70">
+                  {/* 💡 FIXED INVOICE LINE: Memasang kembali baris nomor invoice resmi yang sempat terhapus kosong */}
+                  <div className="flex justify-between">
+                    <span className="text-white/30">INVOICE NO:</span>
+                    <span className="text-white font-bold">{selectedShipment.invoice?.invoiceNumber || selectedShipment.invoice?.invoiceNumString || "INV-2026-TEMP"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/30">FLEET ID:</span>
+                    <span className="text-[#BDF4FF] font-bold">{selectedShipment.receipt_number}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/30">TRANSACTION DATE:</span>
+                    <span className="text-white font-medium">{formatReceiptDate(selectedShipment)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-white/30">STATUS:</span>
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${selectedShipment.status === "PENDING" ? "border border-orange-500/30 text-orange-400 bg-orange-500/5" : "border border-[#10B981]/30 text-[#10B981] bg-[#10B981]/5"}`}>
+                      {selectedShipment.status}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Logistic Details */}
+                <div className="mb-5 bg-[#121317]/50 rounded-lg border border-white/5 p-4">
+                  <p className="text-[10px] font-mono text-white/30 uppercase tracking-[2px] mb-3 flex items-center gap-1.5">
+                    <MapPin size={11} className="text-[#B026FF]"/> Logistic Details
+                  </p>
+                  
+                  <div className="grid grid-cols-2 gap-4 text-[12px] font-inter">
+                    <div className="border-r border-white/5 pr-2">
+                      <span className="block text-[9px] font-mono font-bold uppercase text-[#E5B5FF] tracking-wider mb-1">Shipped From</span>
+                      <p className="text-white font-bold text-[13px] truncate">
+                        {selectedShipment.senderName || "Sender Reference"}
+                      </p>
+                      <p className="text-white/50 text-[11px] truncate mt-0.5">
+                        {selectedShipment.senderCity || "Origin Port"}
+                        {selectedShipment.senderCountry ? `, ${selectedShipment.senderCountry}` : ""}
+                      </p>
+                    </div>
+                    <div className="pl-2">
+                      <span className="block text-[9px] font-mono font-bold uppercase text-[#00E3FD] tracking-wider mb-1">Shipped To</span>
+                      <p className="text-white font-bold text-[13px] truncate">
+                        {selectedShipment.recipientName || "Recipient Reference"}
+                      </p>
+                      <p className="text-white/50 text-[11px] truncate mt-0.5">
+                        {selectedShipment.recipientCity || "Destination Port"}
+                        {selectedShipment.recipientCountry ? `, ${selectedShipment.recipientCountry}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cargo Specification Details */}
+                <div className="mb-6">
+                  <p className="text-[10px] font-mono text-white/30 uppercase tracking-[2px] mb-2.5 flex items-center gap-1.5">
+                    <Anchor size={11} className="text-[#B026FF]"/> CARGO Details
+                  </p>
+                  
+                  <div className="border-t-2 border-dashed border-white/10 pt-3 space-y-2.5 font-mono text-[12px]">
+                    <div className="flex justify-between text-white/50 text-[11px] items-center">
+                      <span className="flex items-center gap-1"><Anchor size={11}/> Cargo Description:</span>
+                      <span className="text-white font-bold truncate max-w-[220px]">{selectedShipment.cargoDesc || "General Load"}</span>
+                    </div>
+
+                    <div className="flex justify-between text-white/50 text-[11px] items-center">
+                      <span className="flex items-center gap-1"><Weight size={11}/> Charged Weight:</span>
+                      <span className="text-white font-bold">{(selectedShipment.weight || 0).toLocaleString('id-ID')} KG</span>
+                    </div>
+
+                    <div className="flex justify-between text-white/50 text-[11px] items-center uppercase">
+                      <span className="flex items-center gap-1"><Box size={11}/> Rate Plan:</span>
+                      <span className="text-[#BDF4FF] font-bold">
+                        {cleanPackageName(selectedShipment.packageTypeString || selectedShipment.package_type_string || selectedShipment.items?.[0]?.packageType?.name)}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between text-white/50 text-[11px] items-center">
+                      <span className="flex items-center gap-1"><Box size={11}/> Cargo Type:</span>
+                      <span className="text-white font-bold">{selectedShipment.category || "General Cargo"}</span>
+                    </div>
+                    
+                    <div className="border-t border-dashed border-white/10 pt-3 mt-2 flex justify-between items-center">
+                      <span className="text-white/40 font-grotesk text-[11px] uppercase tracking-wider font-bold">Grand Total (Net)</span>
+                      <span className="text-[#B026FF] font-inter font-bold text-2xl tracking-[-0.5px] drop-shadow-[0_0_12px_rgba(176,38,255,0.4)]">
+                        {formatCurrency(getReceiptGrandTotal(selectedShipment))}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-white/5">
+                <button 
+                  onClick={() => setShowReceiptModal(false)} 
+                  className="w-full border border-white/10 py-3.5 rounded-lg text-white/50 font-grotesk font-bold text-[14px] uppercase tracking-[3px] hover:bg-white/5 transition-all flex items-center justify-center gap-2"
+                >
+                  <FileText size={16} /> CLOSE RECEIPT
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

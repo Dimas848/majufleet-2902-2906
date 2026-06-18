@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Package, MapPin, Weight, Ruler, Calendar, ShieldCheck, Box, Send, AlertCircle, ChevronLeft, ChevronRight, Phone, User, Mail } from "lucide-react";
+import { Package, MapPin, Weight, Ruler, Calendar, ShieldCheck, Box, Send, AlertCircle, ChevronLeft, ChevronRight, Phone, User, Mail, RefreshCw } from "lucide-react";
 import UserNavbar from "@/components/usernavbar";
 import { bookShipmentCustomer, getCurrentSession } from "@/app/lib/actions";
 
@@ -49,7 +49,6 @@ export default function BookShipmentPage() {
   const [senderContact, setSenderContact] = useState("");
   const [recipientContact, setRecipientContact] = useState("");
   
-  // ✅ STATE BARU: Untuk melacak kategori kargo yang dipilih pelanggan
   const [selectedCategory, setSelectedCategory] = useState("");
 
   // STATE KALENDER KUSTOM
@@ -80,7 +79,6 @@ export default function BookShipmentPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // LOGIKA GENERATOR GRID KALENDER
   const year = currentMonth.getFullYear();
   const month = currentMonth.getMonth();
 
@@ -106,14 +104,14 @@ export default function BookShipmentPage() {
     const packageType = formData.get("packageType") as string;
     const shippingDate = formData.get("shippingDate") as string; 
     
-    // Data Pengirim (Sender)
+    // Data Pengirim
     const senderName = formData.get("senderName") as string;
     const senderEmail = formData.get("senderEmail") as string;
     const senderAddress = formData.get("senderAddress") as string;
     const senderCountry = formData.get("senderCountry") as string;
     const senderCity = formData.get("senderCity") as string;
 
-    // Data Penerima (Recipient)
+    // Data Penerima
     const recipientName = formData.get("recipientName") as string;
     const recipientEmail = formData.get("recipientEmail") as string;
     const recipientAddress = formData.get("recipientAddress") as string;
@@ -123,7 +121,7 @@ export default function BookShipmentPage() {
     // Data Kargo
     const cargoDesc = formData.get("cargoDesc") as string;
     const category = formData.get("category") as string;
-    const customCategory = formData.get("customCategory") as string; // ✅ Ambil input kustom jika ada
+    const customCategory = formData.get("customCategory") as string; 
     const weight = parseFloat(formData.get("weight") as string) || 0;
     const length = parseFloat(formData.get("length") as string) || 0;
     const width = parseFloat(formData.get("width") as string) || 0;
@@ -133,12 +131,12 @@ export default function BookShipmentPage() {
     if (!packageType) newErrors.packageType = "Please select a freight service plan.";
     if (!shippingDate) newErrors.shippingDate = "Please select a preferred shipping date.";
     
-    // VALIDASI SECTION 2: SENDER
+    // VALIDASI SECTION 2: SENDER (DILENGKAPI ATURAN REVISI KONTRAK 3-8 DIGIT)
     if (!senderName.trim()) newErrors.senderName = "Please enter sender's full name.";
     if (!senderContact.trim()) {
       newErrors.senderContact = "Please enter sender's contact number.";
-    } else if (senderContact.trim().length < 3) {
-      newErrors.senderContact = "Sender contact must be at least 3 digits.";
+    } else if (senderContact.trim().length < 3 || senderContact.trim().length > 8) {
+      newErrors.senderContact = "Sender contact must be between 3 and 8 digits.";
     }
     if (!senderEmail.trim()) {
       newErrors.senderEmail = "Please enter sender's email address.";
@@ -146,19 +144,25 @@ export default function BookShipmentPage() {
       newErrors.senderEmail = "Email address must contain an '@' symbol.";
     }
     if (!senderAddress.trim()) newErrors.senderAddress = "Please enter sender's full address.";
-    if (!senderCountry.trim()) newErrors.senderCountry = "Please enter origin country.";
-    if (!senderCity.trim()) {
-      newErrors.senderCity = "Please enter an origin city or port.";
-    } else if (senderCity.trim().length < 3) {
-      newErrors.senderCity = "Origin city must be at least 3 characters.";
+    
+    if (!senderCountry.trim()) {
+      newErrors.senderCountry = "Please enter origin country.";
+    } else if (senderCountry.trim().length < 4) {
+      newErrors.senderCountry = "Origin country must be at least 4 characters.";
     }
 
-    // VALIDASI SECTION 3: RECIPIENT
+    if (!senderCity.trim()) {
+      newErrors.senderCity = "Please enter an origin city or port.";
+    } else if (senderCity.trim().length < 4) {
+      newErrors.senderCity = "Origin city must be at least 4 characters.";
+    }
+
+    // VALIDASI SECTION 3: RECIPIENT (DILENGKAPI ATURAN REVISI KONTRAK 3-8 DIGIT)
     if (!recipientName.trim()) newErrors.recipientName = "Please enter recipient's full name.";
     if (!recipientContact.trim()) {
       newErrors.recipientContact = "Please enter recipient's contact number.";
-    } else if (recipientContact.trim().length < 3) {
-      newErrors.recipientContact = "Recipient contact must be at least 3 digits.";
+    } else if (recipientContact.trim().length < 3 || recipientContact.trim().length > 8) {
+      newErrors.recipientContact = "Recipient contact must be between 3 and 8 digits.";
     }
     if (!recipientEmail.trim()) {
       newErrors.recipientEmail = "Please enter recipient's email address.";
@@ -166,17 +170,22 @@ export default function BookShipmentPage() {
       newErrors.recipientEmail = "Email address must contain an '@' symbol.";
     }
     if (!recipientAddress.trim()) newErrors.recipientAddress = "Please enter destination full address.";
-    if (!recipientCountry.trim()) newErrors.recipientCountry = "Please enter destination country.";
+    
+    if (!recipientCountry.trim()) {
+      newErrors.recipientCountry = "Please enter destination country.";
+    } else if (recipientCountry.trim().length < 4) {
+      newErrors.recipientCountry = "Destination country must be at least 4 characters.";
+    }
+
     if (!recipientCity.trim()) {
       newErrors.recipientCity = "Please enter a destination city or port.";
-    } else if (recipientCity.trim().length < 3) {
-      newErrors.recipientCity = "Destination city must be at least 3 characters.";
+    } else if (recipientCity.trim().length < 4) {
+      newErrors.recipientCity = "Destination city must be at least 4 characters.";
     }
 
     // VALIDASI SECTION 4: CARGO
     if (!cargoDesc.trim()) newErrors.cargoDesc = "Please enter a description for the cargo.";
     
-    // ✅ REVISI VALIDASI: Jika pilih "other", pastikan kolom input ketik sendiri tidak kosong
     if (!category) {
       newErrors.category = "Please select a cargo category.";
     } else if (category === "other" && !customCategory.trim()) {
@@ -190,6 +199,7 @@ export default function BookShipmentPage() {
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
+      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
@@ -206,32 +216,27 @@ export default function BookShipmentPage() {
       const calculatedVolume = length * width * height;
       const weightUnit = formData.get("weightUnit") as string;
       const weightInKg = weightUnit === "tons" ? weight * 1000 : weight;
-
-      // ✅ REVISI LOGIKA: Tentukan kategori akhir yang akan dikirim ke Neon DB
       const finalCategory = category === "other" ? customCategory.trim() : category;
 
       const payload = {
         userId: session.id,
         packageTypeString: packageType,
-        
-        senderName,
-        senderContact,
-        senderEmail,
-        senderAddress,
-        senderCountry,
-        senderCity,
-
-        recipientName,
-        recipientContact,
-        recipientEmail,
-        recipientAddress,
-        recipientCountry,
-        recipientCity,
-
-        cargoDesc,
-        category: finalCategory, // ✅ Mengirimkan string ketikan manual dari pelanggan
+        senderCity: senderCity,
+        recipientCity: recipientCity,
+        cargoDesc: cargoDesc,
+        category: finalCategory,
         weight: weightInKg,
-        dimensions: calculatedVolume
+        dimensions: calculatedVolume,
+        book_date: shippingDate,           
+        senderName: senderName,     
+        senderContact: senderContact, 
+        senderAddress: senderAddress,  
+        senderCountry: senderCountry, 
+        recipientName: recipientName,     
+        recipientContact: recipientContact, 
+        recipientEmail: recipientEmail,   
+        recipientAddress: recipientAddress,  
+        recipientCountry: recipientCountry, 
       };
 
       const res = await bookShipmentCustomer(payload);
@@ -258,7 +263,7 @@ export default function BookShipmentPage() {
     }
   };
 
-  const inputClass = "w-full bg-[#121317] border border-white/10 rounded px-10 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none focus:border-[#B026FF] transition-colors";
+  const inputClass = "w-full bg-[#121317] border rounded px-10 py-3 text-white font-inter text-[13px] placeholder-white/30 focus:outline-none transition-colors";
   const labelClass = "text-white/80 font-grotesk text-[10px] uppercase tracking-[2px] mb-2 block";
   const iconClass = "absolute left-3 top-1/2 -translate-y-1/2 text-[#B026FF] opacity-80";
   
@@ -280,7 +285,6 @@ export default function BookShipmentPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0c] flex flex-col relative overflow-x-hidden">
-      
       <UserNavbar />
 
       {isPageLoading ? (
@@ -313,7 +317,7 @@ export default function BookShipmentPage() {
                       <label className={labelClass}>Freight Service Plan</label>
                       <div className="relative">
                         <ShieldCheck size={16} className={iconClass} />
-                        <select name="packageType" defaultValue="" className={`${inputClass} pl-10 appearance-none ${errors.packageType ? "border-red-500/50" : ""}`}>
+                        <select name="packageType" defaultValue="" className={`${inputClass} border-white/10 pl-10 appearance-none ${errors.packageType ? "!border-red-500/50 focus:border-red-500" : "focus:border-[#B026FF]"}`}>
                           <option value="" disabled>Select service plan...</option>
                           <option value="economy">Maju Economy (Cost-Optimized)</option>
                           <option value="standard">Maju Standard (Standard Container)</option>
@@ -329,7 +333,7 @@ export default function BookShipmentPage() {
                       <label className={labelClass}>Preferred Shipping Date</label>
                       <div 
                         onClick={() => setShowCalendar(!showCalendar)}
-                        className={`${inputClass} cursor-pointer relative flex items-center ${selectedDate ? "text-white" : "text-white/30"} ${errors.shippingDate ? "border-red-500/50" : ""}`}
+                        className={`${inputClass} relative flex items-center ${selectedDate ? "text-white" : "text-white/30"} ${errors.shippingDate ? "border-red-500/50" : "border-white/10"}`}
                       >
                         <Calendar size={16} className={iconClass} />
                         {formatDisplayDate(selectedDate)}
@@ -381,35 +385,35 @@ export default function BookShipmentPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className={labelClass}>Sender Full Name</label>
-                      <div className="relative"><User size={16} className={iconClass} /><input name="senderName" type="text" placeholder="Your name / Company name" className={inputClass} /></div>
+                      <div className="relative"><User size={16} className={iconClass} /><input name="senderName" type="text" placeholder="Your name / Company name" className={`${inputClass} ${errors.senderName ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#B026FF]"}`} /></div>
                       <ErrorMessage message={errors.senderName} />
                     </div>
                     <div>
                       <label className={labelClass}>Sender Contact Number</label>
                       <div className="relative">
                         <Phone size={16} className={iconClass} />
-                        <input name="senderContact" type="text" value={senderContact} onChange={(e) => setSenderContact(e.target.value.replace(/\D/g, ""))} placeholder="Digits only (e.g. 0812345)" className={inputClass} />
+                        <input name="senderContact" type="text" value={senderContact} onChange={(e) => setSenderContact(e.target.value.replace(/\D/g, ""))} placeholder="Digits only (e.g. 0812345)" className={`${inputClass} ${errors.senderContact ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#B026FF]"}`} />
                       </div>
                       <ErrorMessage message={errors.senderContact} />
                     </div>
                     <div className="md:col-span-2">
                       <label className={labelClass}>Sender Email Address</label>
-                      <div className="relative"><Mail size={16} className={iconClass} /><input name="senderEmail" type="email" placeholder="sender@example.com" className={inputClass} /></div>
+                      <div className="relative"><Mail size={16} className={iconClass} /><input name="senderEmail" type="email" placeholder="sender@example.com" className={`${inputClass} ${errors.senderEmail ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#B026FF]"}`} /></div>
                       <ErrorMessage message={errors.senderEmail} />
                     </div>
                     <div className="md:col-span-2">
                       <label className={labelClass}>Sender Full Address</label>
-                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="senderAddress" type="text" placeholder="Detailed origin warehouse address..." className={inputClass} /></div>
+                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="senderAddress" type="text" placeholder="Detailed origin warehouse address..." className={`${inputClass} ${errors.senderAddress ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#B026FF]"}`} /></div>
                       <ErrorMessage message={errors.senderAddress} />
                     </div>
                     <div>
                       <label className={labelClass}>Origin Country</label>
-                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="senderCountry" type="text" placeholder="e.g. Indonesia" className={inputClass} /></div>
+                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="senderCountry" type="text" placeholder="e.g. Indonesia" className={`${inputClass} ${errors.senderCountry ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#B026FF]"}`} /></div>
                       <ErrorMessage message={errors.senderCountry} />
                     </div>
                     <div>
                       <label className={labelClass}>Origin City / Port</label>
-                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="senderCity" type="text" placeholder="e.g. Jakarta" className={inputClass} /></div>
+                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="senderCity" type="text" placeholder="e.g. Jakarta" className={`${inputClass} ${errors.senderCity ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#B026FF]"}`} /></div>
                       <ErrorMessage message={errors.senderCity} />
                     </div>
                   </div>
@@ -423,35 +427,35 @@ export default function BookShipmentPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                       <label className={labelClass}>Recipient Full Name</label>
-                      <div className="relative"><User size={16} className={iconClass} /><input name="recipientName" type="text" placeholder="Recipient name / Client company" className={inputClass} /></div>
+                      <div className="relative"><User size={16} className={iconClass} /><input name="recipientName" type="text" placeholder="Recipient name / Client company" className={`${inputClass} ${errors.recipientName ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#BDF4FF]"}`} /></div>
                       <ErrorMessage message={errors.recipientName} />
                     </div>
                     <div>
                       <label className={labelClass}>Recipient Contact Number</label>
                       <div className="relative">
                         <Phone size={16} className={iconClass} />
-                        <input name="recipientContact" type="text" value={recipientContact} onChange={(e) => setRecipientContact(e.target.value.replace(/\D/g, ""))} placeholder="Digits only (e.g. 0876543)" className={inputClass} />
+                        <input name="recipientContact" type="text" value={recipientContact} onChange={(e) => setRecipientContact(e.target.value.replace(/\D/g, ""))} placeholder="Digits only (e.g. 0876543)" className={`${inputClass} ${errors.recipientContact ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#BDF4FF]"}`} />
                       </div>
                       <ErrorMessage message={errors.recipientContact} />
                     </div>
                     <div className="md:col-span-2">
                       <label className={labelClass}>Recipient Email Address</label>
-                      <div className="relative"><Mail size={16} className={iconClass} /><input name="recipientEmail" type="email" placeholder="recipient@example.com" className={inputClass} /></div>
+                      <div className="relative"><Mail size={16} className={iconClass} /><input name="recipientEmail" type="email" placeholder="recipient@example.com" className={`${inputClass} ${errors.recipientEmail ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#BDF4FF]"}`} /></div>
                       <ErrorMessage message={errors.recipientEmail} />
                     </div>
                     <div className="md:col-span-2">
                       <label className={labelClass}>Recipient Full Address</label>
-                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="recipientAddress" type="text" placeholder="Detailed drop-off destination address..." className={inputClass} /></div>
+                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="recipientAddress" type="text" placeholder="Detailed drop-off destination address..." className={`${inputClass} ${errors.recipientAddress ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#BDF4FF]"}`} /></div>
                       <ErrorMessage message={errors.recipientAddress} />
                     </div>
                     <div>
                       <label className={labelClass}>Destination Country</label>
-                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="recipientCountry" type="text" placeholder="e.g. Singapore" className={inputClass} /></div>
+                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="recipientCountry" type="text" placeholder="e.g. Singapore" className={`${inputClass} ${errors.recipientCountry ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#BDF4FF]"}`} /></div>
                       <ErrorMessage message={errors.recipientCountry} />
                     </div>
                     <div>
                       <label className={labelClass}>Destination City / Port</label>
-                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="recipientCity" type="text" placeholder="e.g. Singapore Port" className={inputClass} /></div>
+                      <div className="relative"><MapPin size={16} className={iconClass} /><input name="recipientCity" type="text" placeholder="e.g. Singapore Port" className={`${inputClass} ${errors.recipientCity ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#BDF4FF]"}`} /></div>
                       <ErrorMessage message={errors.recipientCity} />
                     </div>
                   </div>
@@ -465,11 +469,10 @@ export default function BookShipmentPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div>
                       <label className={labelClass}>Cargo Description</label>
-                      <div className="relative"><Package size={16} className={iconClass} /><input name="cargoDesc" type="text" placeholder="What are you shipping?" className={inputClass} /></div>
+                      <div className="relative"><Package size={16} className={iconClass} /><input name="cargoDesc" type="text" placeholder="What are you shipping?" className={`${inputClass} ${errors.cargoDesc ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#B026FF]"}`} /></div>
                       <ErrorMessage message={errors.cargoDesc} />
                     </div>
                     
-                    {/* ✅ REVISI: Mengubah Select Menjadi Controlled Input via State */}
                     <div>
                       <label className={labelClass}>Cargo Type</label>
                       <div className="relative">
@@ -477,7 +480,7 @@ export default function BookShipmentPage() {
                           name="category" 
                           value={selectedCategory} 
                           onChange={(e) => setSelectedCategory(e.target.value)} 
-                          className={`${inputClass} px-4 appearance-none ${errors.category ? "border-red-500/50" : ""}`}
+                          className={`${inputClass} border-white/10 px-4 appearance-none ${errors.category ? "!border-red-500/50 focus:border-red-500" : "focus:border-[#B026FF]"}`}
                         >
                           <option value="" disabled>Select cargo category...</option>
                           <option value="general">General Goods (Dry)</option>
@@ -485,14 +488,13 @@ export default function BookShipmentPage() {
                           <option value="perishable">Perishable (Needs Cold Storage)</option>
                           <option value="fragile">Fragile / Electronics</option>
                           <option value="oversized">Oversized Machinery</option>
-                          <option value="other">Other (Specify...)</option> {/* ✅ Opsi baru */}
+                          <option value="other">Other (Specify...)</option> 
                         </select>
                       </div>
                       <ErrorMessage message={errors.category} />
                     </div>
                   </div>
 
-                  {/* ✅ ELEMEN BARU: Field Ketik Sendiri yang muncul dinamis jika pilih "other" */}
                   <AnimatePresence>
                     {selectedCategory === "other" && (
                       <motion.div 
@@ -509,7 +511,7 @@ export default function BookShipmentPage() {
                             name="customCategory" 
                             type="text" 
                             placeholder="e.g. Vehicles, Plastic Materials, Furniture, etc." 
-                            className={inputClass} 
+                            className={`${inputClass} ${errors.customCategory ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#B026FF]"}`} 
                           />
                         </div>
                         <ErrorMessage message={errors.customCategory} />
@@ -522,7 +524,7 @@ export default function BookShipmentPage() {
                       <label className={labelClass}>Total Weight</label>
                       <div className="relative">
                         <Weight size={16} className={iconClass} />
-                        <input name="weight" type="number" placeholder="0.0" className={`${inputClass} pl-10 pr-20 ${errors.weight ? "border-red-500/50" : ""}`} />
+                        <input name="weight" type="number" placeholder="0.0" className={`${inputClass} border-white/10 pl-10 pr-20 ${errors.weight ? "!border-red-500/50 focus:border-red-500" : "focus:border-[#B026FF]"}`} />
                         <div className="absolute right-1 top-1 bottom-1 flex items-center">
                           <select name="weightUnit" className="h-full bg-[#1a1b20] border-l border-white/10 rounded-r px-3 text-white/80 font-inter text-[11px] uppercase tracking-wider focus:outline-none cursor-pointer">
                             <option value="kg">KG</option>
@@ -535,17 +537,17 @@ export default function BookShipmentPage() {
                     <div className="md:col-span-3 grid grid-cols-3 gap-4">
                       <div>
                         <label className={labelClass}>Length (m)</label>
-                        <div className="relative"><Ruler size={16} className={iconClass} /><input name="length" type="number" placeholder="L" className={inputClass} /></div>
+                        <div className="relative"><Ruler size={16} className={iconClass} /><input name="length" type="number" placeholder="L" className={`${inputClass} ${errors.length ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#B026FF]"}`} /></div>
                         <ErrorMessage message={errors.length} />
                       </div>
                       <div>
                         <label className={labelClass}>Width (m)</label>
-                        <div className="relative"><Ruler size={16} className={iconClass} /><input name="width" type="number" placeholder="W" className={inputClass} /></div>
+                        <div className="relative"><Ruler size={16} className={iconClass} /><input name="width" type="number" placeholder="W" className={`${inputClass} ${errors.width ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#B026FF]"}`} /></div>
                         <ErrorMessage message={errors.width} />
                       </div>
                       <div>
                         <label className={labelClass}>Height (m)</label>
-                        <div className="relative"><Ruler size={16} className={iconClass} /><input name="height" type="number" placeholder="H" className={inputClass} /></div>
+                        <div className="relative"><Ruler size={16} className={iconClass} /><input name="height" type="number" placeholder="H" className={`${inputClass} ${errors.height ? "border-red-500/50 focus:border-red-500" : "border-white/10 focus:border-[#B026FF]"}`} /></div>
                         <ErrorMessage message={errors.height} />
                       </div>
                     </div>
@@ -555,7 +557,7 @@ export default function BookShipmentPage() {
                 <div className="pt-6 border-t border-white/10 flex flex-col gap-4">
                   {Object.keys(errors).length > 0 && (
                     <div className="p-4 rounded bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-[11px] uppercase tracking-wider flex items-center gap-2">
-                      <AlertCircle size={16} /> Missing Fields. Failed to Process Booking.
+                      <AlertCircle size={16} /> Missing Fields or Invalid Location Data. Failed to Process Booking.
                     </div>
                   )}
 

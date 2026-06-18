@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { CreditCard, CheckCircle2, FileText, XCircle, AlertCircle, X, Trash } from "lucide-react";
+import { CreditCard, CheckCircle2, FileText, XCircle, AlertCircle, X, Trash, Ship, MapPin, Anchor, Weight, Box } from "lucide-react";
 import UserNavbar from "@/components/usernavbar";
 // Import official Server Actions from backend actions.ts
 import { getCustomerBilling, confirmInvoicePayment, getCurrentSession, cancelShipmentCustomer } from "@/app/lib/actions";
@@ -27,32 +27,6 @@ function BillingHistorySkeleton() {
             </div>
           ))}
         </div>
-
-        <div className="h-6 w-48 bg-white/10 rounded mb-6"></div>
-        <div className="bg-[#121317]/40 border border-[#B026FF]/20 rounded-xl overflow-hidden mb-12">
-          <div className="h-12 border-b border-white/5 bg-[#1a1b20]/50"></div>
-          <div className="p-4 flex justify-between items-center border-b border-white/5">
-            <div className="h-4 w-24 bg-white/10 rounded"></div>
-            <div className="h-4 w-32 bg-white/5 rounded"></div>
-            <div className="h-4 w-28 bg-white/5 rounded"></div>
-            <div className="h-4 w-32 bg-white/10 rounded"></div>
-            <div className="h-8 w-32 bg-[#B026FF]/20 rounded"></div>
-          </div>
-        </div>
-
-        <div className="h-6 w-48 bg-white/10 rounded mb-6"></div>
-        <div className="bg-[#121317]/40 border border-white/5 rounded-xl overflow-hidden">
-          <div className="h-12 border-b border-white/5 bg-[#1a1b20]/50"></div>
-          {[1, 2].map((i) => (
-            <div key={i} className="p-4 flex justify-between items-center border-b border-white/5">
-              <div className="h-4 w-24 bg-white/10 rounded"></div>
-              <div className="h-4 w-32 bg-white/5 rounded"></div>
-              <div className="h-4 w-28 bg-white/5 rounded"></div>
-              <div className="h-4 w-24 bg-white/10 rounded"></div>
-              <div className="h-4 w-20 bg-[#10B981]/20 rounded"></div>
-            </div>
-          ))}
-        </div>
       </div>
     </main>
   );
@@ -66,10 +40,10 @@ export default function BillingHistoryPage() {
   const [showInvoiceDetail, setShowInvoiceDetail] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
 
-  // ✅ STATE BARU: Custom Toast System
+  // STATE: Custom Toast System
   const [toast, setToast] = useState<{ type: "success" | "error"; title: string; message: string } | null>(null);
 
-  // ✅ STATE BARU: Custom Cancel Confirmation Modal
+  // STATE: Custom Cancel Confirmation Modal
   const [cancelModal, setCancelModal] = useState<{ isOpen: boolean; invoiceId: number | null; shipmentId: number | null }>({
     isOpen: false,
     invoiceId: null,
@@ -119,7 +93,6 @@ export default function BillingHistoryPage() {
       if (res.success) {
         showNotification("success", "PAYMENT CONFIRMED", "Transaction validated successfully. Fleet deployment protocol initialized.");
         setShowInvoiceDetail(false);
-        // Gives 1.5s for user to look at the beautiful success toast notification before page reload
         setTimeout(() => {
           window.location.reload();
         }, 1500);
@@ -157,7 +130,7 @@ export default function BillingHistoryPage() {
     try {
       const res = await cancelShipmentCustomer(currentInvoiceId, currentShipmentId);
       if (res.success) {
-        showNotification("success", "MANIFEST PURGED", "Shipment manifest order sequence canceled and wiped permanently.");
+        showNotification("success", "SUCCESS", "Shipment canceled succesfully.");
         setShowInvoiceDetail(false);
         setTimeout(() => {
           window.location.reload();
@@ -175,6 +148,18 @@ export default function BillingHistoryPage() {
 
   const formatCurrency = (value: number) => {
     return "Rp " + value.toLocaleString("id-ID");
+  };
+
+  // 💡 SINKRONISASI TANGGAL KALENDER: Membaca tanggal kalender pendaftaran kargo asli dari DB
+  const formatInvoiceDate = (inv: any) => {
+    if (!inv) return "";
+    const rawCalendarDate = inv.shipment?.book_date || inv.shipment?.bookDate || inv.book_date || inv.bookDate;
+    if (rawCalendarDate) {
+      return new Date(rawCalendarDate).toLocaleDateString('id-ID', {
+        day: '2-digit', month: 'short', year: 'numeric'
+      });
+    }
+    return inv.date; // Fallback ke waktu pembuatan invoice jika tanggal kalender kosong
   };
 
   return (
@@ -196,7 +181,7 @@ export default function BillingHistoryPage() {
             }}
           >
             <div className={`absolute top-0 left-0 w-full h-[3px] ${toast.type === "success" ? "bg-[#34C759]" : "bg-[#FF3B30]"}`} />
-            <div className="mt-0.5 shrink-0">
+            <div className="shrink-0 mt-0.5">
               {toast.type === "success" ? <CheckCircle2 size={22} className="text-[#34C759]" /> : <AlertCircle size={22} className="text-[#FF3B30]" />}
             </div>
             <div className="flex-1 min-w-0">
@@ -235,13 +220,12 @@ export default function BillingHistoryPage() {
                   <Trash size={22} />
                 </div>
                 
-                <h3 className="font-grotesk font-bold text-white text-xl tracking-[1px] uppercase mb-2">ABORT FREIGHT SHIPMENT</h3>
+                <h3 className="font-grotesk font-bold text-white text-xl tracking-[1px] uppercase mb-2">CANCEL SHIPMENT</h3>
                 <p className="text-[#FF3B30]/80 font-mono text-[10px] tracking-[2px] uppercase mb-4 font-bold">
-                  MANIFEST TERMINATION SEQUENCING
                 </p>
                 
                 <p className="text-white/60 font-inter text-[13px] leading-relaxed mb-8">
-                  Are you absolutely certain you want to cancel and permanently delete this shipment booking request sequence? This operational command packet is irreversible.
+                  Are you sure to cancel and permanently delete this shipment booking?
                 </p>
                 
                 <div className="flex gap-4 w-full">
@@ -250,14 +234,14 @@ export default function BillingHistoryPage() {
                     onClick={() => setCancelModal({ isOpen: false, invoiceId: null, shipmentId: null })}
                     className="flex-1 py-3 border border-white/10 rounded text-white/60 hover:text-white hover:bg-white/5 font-mono text-[11px] font-bold tracking-[2px] uppercase transition-colors"
                   >
-                    ABORT
+                    CANCEL
                   </button>
                   <button 
                     type="button" 
                     onClick={executeCancelBooking}
                     className="flex-1 py-3 bg-[#FF3B30]/10 border border-[#FF3B30]/40 text-[#FF3B30] rounded font-mono text-[11px] font-bold tracking-[2px] uppercase hover:bg-[#FF3B30] hover:text-white shadow-[0_0_15px_rgba(255,59,48,0.2)] transition-all"
                   >
-                    CONFIRM CANCEL
+                    YES
                   </button>
                 </div>
               </div>
@@ -314,7 +298,8 @@ export default function BillingHistoryPage() {
                         <tr key={invoice.id} className="border-b border-white/5 hover:bg-[#B026FF]/5 transition-colors">
                           <td className="p-4 font-mono text-[#E5B5FF]">{invoice.invoiceNumString}</td>
                           <td className="p-4 text-white/70">{invoice.ref}</td>
-                          <td className="p-4 text-white/70">{invoice.date}</td>
+                          {/* 💡 TANGGAL FORM KALENDER DI TABEL PENDING */}
+                          <td className="p-4 text-white/70">{formatInvoiceDate(invoice)}</td>
                           <td className="p-4 font-bold">{formatCurrency(invoice.amount)}</td>
                           <td className="p-4">
                             <button onClick={() => {setSelectedInvoice(invoice); setShowInvoiceDetail(true);}} className="bg-[#B026FF] hover:bg-[#9a1ce6] text-white px-4 py-1.5 rounded text-[11px] font-bold uppercase tracking-wider transition-all">Confirm Payment</button>
@@ -344,7 +329,8 @@ export default function BillingHistoryPage() {
                         <tr key={invoice.id} className="border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer" onClick={() => {setSelectedInvoice(invoice); setShowInvoiceDetail(true);}}>
                           <td className="p-4 font-mono text-white/40">{invoice.invoiceNumString}</td>
                           <td className="p-4 text-white/70">{invoice.ref}</td>
-                          <td className="p-4 text-white/70">{invoice.date}</td>
+                          {/* 💡 TANGGAL FORM KALENDER DI TABEL RIWAYAT TRANSAKSI */}
+                          <td className="p-4 text-white/70">{formatInvoiceDate(invoice)}</td>
                           <td className="p-4">{formatCurrency(invoice.amount)}</td>
                           <td className="p-4"><span className="text-[#10B981] flex items-center gap-1 text-[11px] uppercase tracking-wider font-bold"><CheckCircle2 size={12}/> Success</span></td>
                         </tr>
@@ -361,72 +347,147 @@ export default function BillingHistoryPage() {
       {/* Invoice Details Sliding UI Overlay Popover */}
       <AnimatePresence>
         {showInvoiceDetail && selectedInvoice && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center px-4 py-10">
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowInvoiceDetail(false)} className="fixed inset-0 bg-black/80 backdrop-blur-sm" />
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-[500px] bg-[#0d0d11] border border-white/10 rounded-2xl p-8 shadow-[0_0_50px_rgba(176,38,255,0.1)] z-10 my-auto overflow-hidden">
-              <button onClick={() => setShowInvoiceDetail(false)} className="absolute top-4 right-4 text-white/40 hover:text-white"><XCircle size={24} /></button>
-              <div className="absolute top-0 left-0 w-full h-[4px] bg-[#B026FF]/20" />
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 overflow-y-auto bg-black/80 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowInvoiceDetail(false)} className="fixed inset-0 cursor-pointer" />
+            
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-[480px] bg-[#0d0d11] border border-white/10 rounded-2xl p-6 md:p-8 shadow-[0_0_50px_rgba(176,38,255,0.15)] z-10 my-auto flex flex-col justify-between">
+              <button onClick={() => setShowInvoiceDetail(false)} className="absolute top-4 right-4 text-white/40 hover:text-white transition-colors"><XCircle size={22} /></button>
+              <div className="absolute top-0 left-0 w-full h-[4px] bg-[#B026FF]" />
               
-              <div className="flex justify-between items-start mb-8">
-                <div>
-                  <h2 className="text-white font-grotesk font-bold text-2xl uppercase tracking-wider mb-1">Invoice Detail</h2>
-                  <p className="text-white/40 font-mono text-[12px]">{selectedInvoice.invoiceNumString}</p>
+              <div>
+                {/* === TAMPILAN RESI STRUK NOTA LOGISTIK === */}
+                <div className="text-center pb-4 mb-4 border-b border-dashed border-white/10">
+                  <div className="inline-flex items-center justify-center bg-[#B026FF]/10 text-[#E5B5FF] p-2.5 rounded-full mb-2 border border-[#B026FF]/20">
+                    <Ship size={20} />
+                  </div>
+                  <h3 className="font-grotesk font-bold text-[18px] text-white tracking-[2px] uppercase">SHIPMENT RECEIPT</h3>
+                  <p className="text-white/40 font-mono text-[9px] uppercase tracking-[3px] mt-0.5">MAJU FLEET</p>
                 </div>
-                <div className={`px-3 py-1 rounded border text-[10px] font-bold uppercase tracking-widest ${selectedInvoice.status === "Pending" ? "border-orange-500/50 text-orange-500 bg-orange-500/5" : "border-[#10B981]/50 text-[#10B981] bg-[#10B981]/5"}`}>
-                  {selectedInvoice.status}
-                </div>
-              </div>
 
-              <div className="space-y-4 mb-8">
-                <div className="flex justify-between text-[11px] uppercase tracking-wider border-b border-white/5 pb-2">
-                  <span className="text-white/40">Shipment Ref</span>
-                  <span className="text-white font-mono">{selectedInvoice.ref}</span>
-                </div>
-                <div className="bg-[#121317] rounded-lg p-4 space-y-3">
-                  {selectedInvoice.items.map((item: any, idx: number) => (
-                    <div key={idx} className="flex justify-between text-[12px]">
-                      <span className="text-white/60">{item.desc}</span>
-                      <span className="text-white font-mono">{formatCurrency(item.price)}</span>
-                    </div>
-                  ))}
-                  <div className="pt-3 mt-1 border-t border-white/10 flex justify-between items-end">
-                    <span className="text-white/40 font-grotesk text-[10px] uppercase">Grand Total</span>
-                    <span className="text-[#B026FF] font-inter font-bold text-xl">{formatCurrency(selectedInvoice.amount)}</span>
+                {/* Meta Data Utama Nota Struk */}
+                <div className="font-mono text-[11px] bg-[#121317] border border-white/5 rounded-lg p-4 space-y-2.5 mb-5 text-white/70">
+                  <div className="flex justify-between">
+                    <span className="text-white/30">INVOICE NO:</span>
+                    <span className="text-white font-bold">{selectedInvoice.invoiceNumString}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/30">FLEET REF ID:</span>
+                    <span className="text-[#BDF4FF] font-bold">{selectedInvoice.ref}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-white/30">DATE:</span>
+                    {/* 💡 TANGGAL FORM KALENDER DI NOTA STRUK RESI */}
+                    <span>{formatInvoiceDate(selectedInvoice)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-white/30">STATUS:</span>
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${selectedInvoice.status === "Pending" ? "border border-orange-500/30 text-orange-400 bg-orange-500/5" : "border border-[#10B981]/30 text-[#10B981] bg-[#10B981]/5"}`}>
+                      {selectedInvoice.status}
+                    </span>
                   </div>
                 </div>
-              </div>
 
-              {selectedInvoice.status === "Pending" ? (
-                <div className="space-y-4">
-                  <div className="bg-orange-500/5 border border-orange-500/20 p-4 rounded-lg flex gap-3">
-                    <AlertCircle size={20} className="text-orange-500 shrink-0" />
-                    <p className="text-[11px] text-orange-500/80 leading-relaxed uppercase tracking-wider">
-                      Make payment to the Maju Fleet account to process your cargo delivery to the next stage.
-                    </p>
-                  </div>
+                {/* SINKRONISASI ROUTE DINAMIS */}
+                <div className="mb-5 bg-[#121317]/50 rounded-lg border border-white/5 p-4">
+                  <p className="text-[10px] font-mono text-white/30 uppercase tracking-[2px] mb-3 flex items-center gap-1.5">
+                    <MapPin size={11} className="text-[#B026FF]"/> Logistic Details
+                  </p>
                   
-                  {/* Custom Cancel Sequence button linked directly with custom verification window */}
-                  <button 
-                    onClick={handleCancelBookingClick}
-                    disabled={isSubmitting}
-                    className="w-full bg-transparent border border-red-500/40 hover:bg-red-500/10 text-red-400 py-3.5 rounded-lg font-grotesk font-bold text-[12px] uppercase tracking-[2px] transition-all disabled:opacity-30"
-                  >
-                    {isSubmitting ? "Processing Clearance..." : "Cancel & Delete Shipment"}
-                  </button>
-
-                  <button 
-                    onClick={handlePayment} 
-                    disabled={isSubmitting}
-                    className="w-full bg-[#B026FF] py-4 rounded-lg text-white font-grotesk font-bold text-[14px] uppercase tracking-[3px] shadow-[0_0_20px_rgba(176,38,255,0.3)] hover:bg-[#9a1ce6] transition-all disabled:opacity-50"
-                  >
-                    {isSubmitting ? "Processing Clearance..." : "Proceed to Pay"}
-                  </button>
+                  <div className="grid grid-cols-2 gap-4 text-[12px] font-inter">
+                    <div className="border-r border-white/5 pr-2">
+                      <span className="block text-[9px] font-mono font-bold uppercase text-[#E5B5FF] tracking-wider mb-1">Shipped From</span>
+                      <p className="text-white font-bold text-[13px] truncate">
+                        {selectedInvoice.shipment?.senderName || selectedInvoice.senderName || "Sender Reference"}
+                      </p>
+                      <p className="text-white/50 text-[11px] truncate mt-0.5">
+                        {selectedInvoice.shipment?.senderCity || selectedInvoice.senderCity || "Origin Port"}
+                        {(selectedInvoice.shipment?.senderCountry || selectedInvoice.senderCountry) ? `, ${selectedInvoice.shipment?.senderCountry || selectedInvoice.senderCountry}` : ""}
+                      </p>
+                    </div>
+                    <div className="pl-2">
+                      <span className="block text-[9px] font-mono font-bold uppercase text-[#00E3FD] tracking-wider mb-1">Shipped To</span>
+                      <p className="text-white font-bold text-[13px] truncate">
+                        {selectedInvoice.shipment?.recipientName || selectedInvoice.recipientName || "Recipient Reference"}
+                      </p>
+                      <p className="text-white/50 text-[11px] truncate mt-0.5">
+                        {selectedInvoice.shipment?.recipientCity || selectedInvoice.recipientCity || "Destination Port"}
+                        {(selectedInvoice.shipment?.recipientCountry || selectedInvoice.recipientCountry) ? `, ${selectedInvoice.shipment?.recipientCountry || selectedInvoice.recipientCountry}` : ""}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <button onClick={() => setShowInvoiceDetail(false)} className="w-full border border-white/10 py-4 rounded-lg text-white/50 font-grotesk font-bold text-[14px] uppercase tracking-[3px] hover:bg-white/5 transition-all flex items-center justify-center gap-2">
-                  <FileText size={16} /> Download PDF Receipt
-                </button>
-              )}
+
+                {/* SINKRONISASI MANIFEST DETAIL CONTAINER */}
+                <div className="mb-6">
+                  <p className="text-[10px] font-mono text-white/30 uppercase tracking-[2px] mb-2.5 flex items-center gap-1.5">
+                    <Anchor size={11} className="text-[#B026FF]"/> CARGO Details
+                  </p>
+                  
+                  <div className="border-t-2 border-dashed border-white/10 pt-3 space-y-2.5 font-mono text-[12px]">
+                    
+                    <div className="flex justify-between text-white/50 text-[11px] items-center">
+                      <span className="flex items-center gap-1"><Weight size={11}/> Charged Weight:</span>
+                      <span className="text-white font-bold">
+                        {(selectedInvoice.shipment?.weight || selectedInvoice.weight || 0).toLocaleString('id-ID')} KG
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between text-white/50 text-[11px] items-center uppercase">
+                      <span className="flex items-center gap-1"><Box size={11}/> Rate Plan:</span>
+                      <span className="text-[#BDF4FF] font-bold">
+                        {selectedInvoice.shipment?.packageTypeString || selectedInvoice.packageTypeString || "Standard"}
+                      </span>
+                    </div>
+
+                    <div className="flex justify-between text-white/50 text-[11px] items-center">
+                      <span className="flex items-center gap-1"><Anchor size={11}/> Cargo Type:</span>
+                      <span className="text-white font-bold truncate max-w-[200px]">
+                        {selectedInvoice.shipment?.category || selectedInvoice.category || "General Cargo"}
+                      </span>
+                    </div>
+                    
+                    {/* Total Breakline Struk */}
+                    <div className="border-t border-dashed border-white/10 pt-3 mt-2 flex justify-between items-center">
+                      <span className="text-white/40 font-grotesk text-[11px] uppercase tracking-wider font-bold">Grand Total (Net)</span>
+                      <span className="text-[#B026FF] font-inter font-bold text-2xl tracking-[-0.5px] drop-shadow-[0_0_12px_rgba(176,38,255,0.4)]">
+                        {formatCurrency(selectedInvoice.amount)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* AREA TOMBOL DINAMIS PENUH */}
+              <div className="mt-4 pt-4 border-t border-white/5">
+                {selectedInvoice.status === "Pending" ? (
+                  <div className="flex flex-col gap-3">
+                    <button 
+                      onClick={handleCancelBookingClick}
+                      disabled={isSubmitting}
+                      className="w-full bg-transparent border border-red-500/40 hover:bg-red-500/10 text-red-400 py-3 rounded-lg font-grotesk font-bold text-[12px] uppercase tracking-[2px] transition-all disabled:opacity-30"
+                    >
+                      {isSubmitting ? "Processing Payment..." : "Cancel & Delete Shipment"}
+                    </button>
+
+                    <button 
+                      onClick={handlePayment} 
+                      disabled={isSubmitting}
+                      className="w-full bg-[#B026FF] py-3.5 rounded-lg text-white font-grotesk font-bold text-[14px] uppercase tracking-[3px] shadow-[0_0_20px_rgba(176,38,255,0.3)] hover:bg-[#9a1ce6] transition-all disabled:opacity-50"
+                    >
+                      {isSubmitting ? "Processing Payment..." : "Proceed to Pay"}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="bg-emerald-500/5 border border-emerald-500/20 p-4 rounded-lg flex gap-3 mb-2">
+                      <CheckCircle2 size={20} className="text-emerald-400 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-emerald-400/80 leading-relaxed uppercase tracking-wider font-mono">
+                        Payment Succeed. You can now trace your shipment at My Shipment.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
             </motion.div>
           </div>
         )}

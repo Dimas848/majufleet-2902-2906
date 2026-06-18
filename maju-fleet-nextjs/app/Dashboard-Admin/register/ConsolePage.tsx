@@ -70,7 +70,7 @@ function AdminControlContent() {
       setViewMode("table");
       setSearchQuery("");
       setFleetStatusFilter("ALL");
-      setIsDirty(false);
+      setIsDirty(false); 
     }
   }, [searchParams]);
 
@@ -94,7 +94,6 @@ function AdminControlContent() {
       
       if (dbData.shipments) {
         setShipments(dbData.shipments.map((s: any) => {
-          // ✅ FIX LOGIKA 1: Pastikan status awal kargo baru murni bernilai "PENDING"
           const determinedStatus = s.status === "DELAYED" ? "PENDING" : (s.status || "PENDING");
           
           return {
@@ -141,7 +140,7 @@ function AdminControlContent() {
   const handleAddNew = () => {
     setEditingId(null);
     setInitialStatus("");
-    setIsDirty(false);
+    setIsDirty(false); 
     
     let initialData: any = {};
     if (activeTab === "fleet") {
@@ -162,10 +161,9 @@ function AdminControlContent() {
 
   const handleEdit = (item: any) => {
     setEditingId(item.id);
-    setIsDirty(false);
+    setIsDirty(false); 
     const currentPackageId = item.items && item.items.length > 0 ? String(item.items[0].packageTypeId) : "2";
     
-    // ✅ FIX LOGIKA 2: Jika status kargo masih PENDING, paksa vesselId & captain bernilai KOSONG ("") di form console
     const currentStatus = item.status || "PENDING";
     const isPending = currentStatus === "PENDING";
     setInitialStatus(currentStatus);
@@ -232,10 +230,13 @@ function AdminControlContent() {
     let errors: Record<string, string> = {};
 
     if (activeTab === "fleet") {
-      if (!formData.vesselId) errors.vesselId = "Please select an operational vessel.";
-      if (!formData.captain) errors.captain = "Please select a captain on board.";
+      // ✅ LOGIKA BARU: Jika statusnya CANCELED atau PENDING, admin TIDAK WAJIB memilih kapal/kapten.
+      if (formData.status !== "CANCELED" && formData.status !== "PENDING") {
+        if (!formData.vesselId) errors.vesselId = "Please select an operational vessel.";
+        if (!formData.captainId) errors.captainId = "Please select a captain on board.";
+      }
       
-      if (formData.vesselId) {
+      if (formData.vesselId && formData.status !== "CANCELED") {
         const selectedVessel = vessels.find(v => String(v.id) === String(formData.vesselId));
         const cargoWeight = parseFloat(formData.weight || "0");
         if (selectedVessel && cargoWeight > selectedVessel.capacity) {
@@ -292,7 +293,7 @@ function AdminControlContent() {
         showNotification("success", "MATRIX SYNCHRONIZED", `Data parameter adjustments successfully compiled and committed.`);
         setFormData({});
         setEditingId(null);
-        setIsDirty(false);
+        setIsDirty(false); 
         fetchNeonData();
         setViewMode("table");
       } else {
@@ -365,7 +366,8 @@ function AdminControlContent() {
   const getStatusBadgeStyle = (status: string) => {
     const s = status ? status.toUpperCase() : "PENDING";
     if (s === "DELIVERED" || s === "ARRIVED") return "bg-[#34C759]/10 text-[#34C759] border-[#34C759]/20 shadow-[0_0_10px_rgba(52,199,89,0.1)]";
-    if (s === "NOT DEPARTED YET") return "bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/20 shadow-[0_0_10px_rgba(255,59,48,0.1)]";
+    if (s === "CANCELED") return "bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/20 shadow-[0_0_10px_rgba(255,59,48,0.1)]";
+    if (s === "NOT DEPARTED YET") return "bg-[#FF9500]/10 text-[#FF9500] border-[#FF9500]/20 shadow-[0_0_10px_rgba(255,149,0,0.1)]";
     if (s === "EN ROUTE") return "bg-[#00E3FD]/10 text-[#00E3FD] border-[#00E3FD]/20 shadow-[0_0_10px_rgba(0,227,253,0.1)]";
     return "bg-[#FFCC00]/10 text-[#FFCC00] border-[#FFCC00]/20 shadow-[0_0_10px_rgba(255,204,0,0.1)]";
   };
@@ -419,15 +421,14 @@ function AdminControlContent() {
     </div>
   );
 
+  // ✅ TAMBAHKAN CANCELED KE LIST STATUS DROPDOWN FLEET
   const currentAvailableStatuses = useMemo(() => {
-    if (initialStatus === "EN ROUTE") {
-      return ["EN ROUTE", "NOT DEPARTED YET", "DELIVERED"];
-    }
-    return ["PENDING", "NOT DEPARTED YET", "EN ROUTE", "ARRIVED", "DELIVERED"];
+    if (initialStatus === "EN ROUTE") return ["EN ROUTE", "NOT DEPARTED YET", "DELIVERED", "CANCELED"];
+    return ["PENDING", "NOT DEPARTED YET", "EN ROUTE", "ARRIVED", "DELIVERED", "CANCELED"];
   }, [initialStatus]);
 
   const isFleetAssignmentDisabled = useMemo(() => {
-    return formData.status !== "PENDING";
+    return formData.status === "PENDING" || formData.status === "CANCELED";
   }, [formData.status]);
 
   return (
@@ -551,6 +552,7 @@ function AdminControlContent() {
                   <option value="ARRIVED">ARRIVED</option>
                   <option value="DELIVERED">DELIVERED</option>
                   <option value="NOT DEPARTED YET">NOT DEPARTED YET</option>
+                  <option value="CANCELED">CANCELED</option> {/* ✅ OPSI CANCELED DITAMBAHKAN DI FILTER */}
                 </select>
                 <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#B026FF]"><Filter size={14} /></div>
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={14} /></div>
@@ -750,19 +752,19 @@ function AdminControlContent() {
 
                         <div>
                           <label className={`text-[12px] font-bold tracking-[3px] uppercase mb-3 block font-mono ${formErrors.captainId ? "text-[#FF3B30]" : "text-white/40"}`}>ASSIGNED CAPTAIN / CREW LEAD</label>
-                            <div className="relative">
-                              <select
-                                disabled={isFleetAssignmentDisabled}
-                                value={formData.captainId || ""}
-                                onChange={e => updateField("captainId", e.target.value)}
-                                className={`${getSelectClass("captainId")} ${isFleetAssignmentDisabled ? "opacity-40 cursor-not-allowed text-white/40" : ""}`}
-                              >
-                                <option value="" disabled hidden>Select captain on board...</option>
-                                {crews.map(c => (<option key={c.id} value={c.id}>{c.name} ({c.role ? c.role.replace(/_/g, ' ').toUpperCase() : "CREW"})</option>))}
-                              </select>
-                              <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
-                            </div>
-                            <br/><FieldError error={formErrors.captainId} />
+                          <div className="relative">
+                            <select
+                              disabled={isFleetAssignmentDisabled}
+                              value={formData.captainId || ""}
+                              onChange={e => updateField("captainId", e.target.value)}
+                              className={`${getSelectClass("captainId")} ${isFleetAssignmentDisabled ? "opacity-40 cursor-not-allowed text-white/40" : ""}`}
+                            >
+                              <option value="" disabled hidden>Select captain on board...</option>
+                              {crews.map(c => (<option key={c.id} value={c.id}>{c.name} ({c.role ? c.role.replace(/_/g, ' ').toUpperCase() : "CREW"})</option>))}
+                            </select>
+                            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-white/40"><ChevronDown size={20} /></div>
+                          </div>
+                          <br/><FieldError error={formErrors.captainId} />
                         </div>
                       </div>
                     </div>

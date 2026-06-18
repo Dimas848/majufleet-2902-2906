@@ -124,6 +124,21 @@ export async function getCurrentSession() {
   return { id: parseInt(userId), name: userName };
 }
 
+// ✅ FUNGSI BARU UNTUK MENGAMBIL PROFIL USER (Menghilangkan error module export)
+export async function getUserProfile(userId: number) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: Number(userId) }
+    });
+    if (!user) return { success: false, message: "User not found in system." };
+    
+    return { success: true, user };
+  } catch (error) {
+    console.error("Gagal memuat profil user:", error);
+    return { success: false, message: "Database read error encountered." };
+  }
+}
+
 // Fungsi Baru untuk Menarik Data Access Log ke UI Admin
 export async function getSystemAccessLogs() {
   try {
@@ -376,6 +391,16 @@ export async function bookShipmentCustomer(formData: {
   category: string;
   weight: number;
   dimensions: number;
+  book_date?: string;
+  senderName?: string;
+  senderContact?: string;
+  senderAddress?: string;
+  senderCountry?: string;
+  recipientName?: string;
+  recipientContact?: string;
+  recipientEmail?: string;
+  recipientAddress?: string;
+  recipientCountry?: string;
 }) {
   try {
     const cleanUserId = Number(formData.userId);
@@ -430,15 +455,11 @@ export async function bookShipmentCustomer(formData: {
     const receiptNumber = `MJF-${Math.floor(100000 + Math.random() * 900000)}`;
     const invoiceNumber = `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    // 🔥 CREATE BERSARANG (NESTED CREATE): Membuat Shipment, Items, dan Invoice sekaligus!
-    // ✅ Field "captain" DIHAPUS dari create karena sekarang relasi ke User (captainId).
-    // Biarkan captainId tetap null (artinya "Awaiting Assignment") sampai admin menugaskan kapten.
     await prisma.shipment.create({
       data: {
         receipt_number: receiptNumber,
         status: "PENDING",
         userId: cleanUserId,
-        vesselId: 1,
         originId: originId,
         destId: destId,
         cargoDesc: formData.cargoDesc,
@@ -446,22 +467,21 @@ export async function bookShipmentCustomer(formData: {
         weight: cleanWeight,
         weightUnit: "KG",
         dimensions: cleanDimensions,
-        book_date: new Date(),
+        book_date: formData.book_date ? new Date(formData.book_date) : new Date(),
 
-        senderName: activeUser.name,
+        senderName: formData.senderName || activeUser.name,
         senderEmail: activeUser.email,
-        senderContact: activeUser.phone || "08123456789",
+        senderContact: formData.senderContact || activeUser.phone || "08123456789",
         senderCity: formData.senderCity,
-        senderAddress: activeUser.address || "Hub Logistik Utama",
-        senderCountry: "Indonesia",
+        senderAddress: formData.senderAddress || activeUser.address || "Hub Logistik Utama",
+        senderCountry: formData.senderCountry || "Indonesia",
 
-        recipientName: "PT Global Logistics Partner",
-        recipientContact: "021998877",
-        recipientEmail: "partner@majufleet.com",
-        recipientAddress: "Port Warehouse Zone Alpha",
+        recipientName: formData.recipientName || "Recipient Reference",
+        recipientContact: formData.recipientContact || "021998877",
+        recipientEmail: formData.recipientEmail || "partner@majufleet.com",
+        recipientAddress: formData.recipientAddress || "Port Warehouse Zone",
         recipientCity: formData.recipientCity,
-        recipientCountry: "Destination Country",
-        // captain: dihapus — captainId otomatis null sampai di-assign
+        recipientCountry: formData.recipientCountry || "Destination Country",
 
         items: {
           create: [
@@ -495,16 +515,14 @@ export async function bookShipmentCustomer(formData: {
 export async function confirmInvoicePayment(invoiceId: number, shipmentId: number) {
   try {
     await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      // 1. Ubah status Invoice jadi Paid
-      await tx.shipment.update({
-        where: { id: Number(shipmentId) },
-        data: { status: "PENDING" } // 🔒 Ubah ke PENDING agar admin yang mengubahnya nanti ke NOT DEPARTED YET setelah kapal diisi
+      await tx.invoice.update({
+        where: { id: Number(invoiceId) },
+        data: { status: "Paid" }
       });
 
-      // 2. Ubah status Kargo jadi Siap Berangkat
       await tx.shipment.update({
         where: { id: Number(shipmentId) },
-        data: { status: "NOT DEPARTED YET" }
+        data: { status: "PENDING" } 
       });
     });
 
@@ -519,7 +537,6 @@ export async function confirmInvoicePayment(invoiceId: number, shipmentId: numbe
 
 export async function getCustomerBilling(userId: number) {
   try {
-    // Pastikan userId dikonversi ke Number
     const uId = Number(userId);
 
     const dbInvoices = await prisma.invoice.findMany({
@@ -534,9 +551,6 @@ export async function getCustomerBilling(userId: number) {
       orderBy: { createdAt: 'desc' }
     });
 
-    // DEBUG: Cek apakah data benar-benar ditemukan
-    console.log(`Found ${dbInvoices.length} invoices for user ${uId}`);
-
     if (dbInvoices.length === 0) return { success: true, invoices: [], summary: { totalUnpaid: 0, totalPaid: 0, pendingCount: 0 } };
 
     let totalUnpaid = 0;
@@ -545,9 +559,8 @@ export async function getCustomerBilling(userId: number) {
 
     const invoices = dbInvoices.map((inv: any) => {
       const s = inv.shipment;
-      // Gunakan fallback agar tidak crash jika shipment/items null
       const cleanWeight = s?.weight || 0;
-      const amount = Number(inv.amount); // Pastikan angka (BigInt/String jadi Number)
+      const amount = Number(inv.amount); 
 
       if (inv.status !== "Paid" && s?.status !== "CANCELED") {
         totalUnpaid += amount;
@@ -556,6 +569,7 @@ export async function getCustomerBilling(userId: number) {
         totalPaid += amount;
       }
 
+      // ✅ FIX BUG: MENGIRIMKAN DATA SENDER DAN RECIPIENT AGAR DIBACA NOTA UI
       return {
         id: inv.id,
         invoiceNumString: inv.invoiceNumber,
@@ -564,6 +578,20 @@ export async function getCustomerBilling(userId: number) {
         date: new Date(inv.createdAt).toLocaleDateString('id-ID'),
         amount: amount,
         status: s?.status === "CANCELED" ? "Canceled" : inv.status,
+        
+        // --- DATA PENTING UNTUK RESI UI ---
+        senderName: s?.senderName || "Sender Reference",
+        senderCity: s?.senderCity || "Origin Port",
+        senderCountry: s?.senderCountry || "",
+        recipientName: s?.recipientName || "Recipient Reference",
+        recipientCity: s?.recipientCity || "Destination Port",
+        recipientCountry: s?.recipientCountry || "",
+        packageTypeString: s?.items?.[0]?.packageType?.name || "Standard",
+        category: s?.category || "General Cargo",
+        weight: cleanWeight,
+        cargoDesc: s?.cargoDesc || "",
+        // ----------------------------------
+
         items: [
           { desc: `Freight Charges (${s?.cargoDesc || "Cargo load"}) - ${cleanWeight} KG`, price: amount }
         ]
@@ -583,7 +611,7 @@ export async function trackShipmentCustomer(receiptNumber: string) {
       where: { receipt_number: receiptNumber },
       include: {
         vessel: true,
-        captain: true, // ✅ ikut ambil relasi captain agar bisa ditampilkan di tracking
+        captain: true,
         items: { include: { packageType: true } },
         details: { orderBy: { update_time: "desc" }, take: 1 }
       }
@@ -670,7 +698,6 @@ export async function getAnalyticsByTime(chartTimeFilter: "Day" | "Week" | "Mont
     const now = new Date();
     let startDate = new Date();
 
-    // Logika pemotongan waktu mundur
     if (chartTimeFilter === "Day") startDate.setDate(now.getDate() - 1);
     else if (chartTimeFilter === "Week") startDate.setDate(now.getDate() - 7);
     else if (chartTimeFilter === "Month") startDate.setDate(now.getDate() - 30);
@@ -694,7 +721,19 @@ export async function getAnalyticsByTime(chartTimeFilter: "Day" | "Week" | "Mont
   }
 }
 
-export async function updateUserProfile(userId: number, data: { name: string; phone: string; address: string; password?: string }) {
+// ✅ FIX ERROR TYPESCRIPT: Menambahkan opsionalitas (gender, age, origin) pada type signature `updateUserProfile`
+export async function updateUserProfile(
+  userId: number, 
+  data: { 
+    name: string; 
+    phone: string; 
+    address: string; 
+    password?: string;
+    gender?: string;
+    age?: number;
+    origin?: string;
+  }
+) {
   try {
     const updateData: any = {
       name: data.name,
@@ -702,7 +741,10 @@ export async function updateUserProfile(userId: number, data: { name: string; ph
       address: data.address || null,
     };
 
-    // Jika admin/crew mengisi kolom password baru, ikut masukkan ke database
+    if (data.gender !== undefined) updateData.gender = data.gender;
+    if (data.age !== undefined) updateData.age = data.age;
+    if (data.origin !== undefined) updateData.origin = data.origin;
+
     if (data.password && data.password.trim() !== "") {
       updateData.password = data.password;
     }
@@ -714,6 +756,9 @@ export async function updateUserProfile(userId: number, data: { name: string; ph
 
     // Segarkan cache halaman setelah data berubah
     revalidatePath("/Dashboard-Admin/profile");
+    revalidatePath("/profile");
+    revalidatePath("/dashboard/profile");
+    
     return { success: true, message: "Profile core matrices synchronized successfully." };
   } catch (error) {
     console.error("Gagal mengupdate profil user:", error);
@@ -723,7 +768,6 @@ export async function updateUserProfile(userId: number, data: { name: string; ph
 
 export async function changeUserPassword(userId: number, data: { oldPassword: string; newPassword: string }) {
   try {
-    // 1. Cari user di database Neon
     const user = await prisma.user.findUnique({
       where: { id: Number(userId) }
     });
@@ -732,12 +776,10 @@ export async function changeUserPassword(userId: number, data: { oldPassword: st
       return { success: false, message: "User node not found." };
     }
 
-    // 2. Verifikasi apakah password lama yang dimasukkan sesuai
     if (user.password !== data.oldPassword) {
       return { success: false, message: "Current access key verification failed. Incorrect password." };
     }
 
-    // 3. Jika cocok, update dengan password baru
     await prisma.user.update({
       where: { id: Number(userId) },
       data: { password: data.newPassword }

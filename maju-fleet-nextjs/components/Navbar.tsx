@@ -258,7 +258,7 @@ export default function Navbar() {
 
             <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
               <button id="login-trigger-btn" onClick={() => switchModal("login")} className="px-6 py-2.5 rounded border border-[#B026FF]/50 text-[#E5B5FF] hover:bg-[#B026FF]/10 font-grotesk font-bold text-[13px] uppercase tracking-[1px] transition-all duration-200 backdrop-blur-md" style={{ boxShadow: "0 0 15px rgba(176,38,255,0.15)" }}>
-                LOGIN DASHBOARD
+                LOGIN
               </button>
             </motion.div>
           </div>
